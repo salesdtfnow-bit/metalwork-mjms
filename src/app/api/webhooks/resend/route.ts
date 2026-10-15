@@ -19,11 +19,12 @@ export async function POST(req: Request) {
   const { Webhook } = await import("svix");
   let event: { type: string; data: { email_id: string; from?: string; subject?: string } };
   try {
-    event = new Webhook(secret).verify(payload, {
+    new Webhook(secret).verify(payload, {
       "svix-id": req.headers.get("svix-id") ?? "",
       "svix-timestamp": req.headers.get("svix-timestamp") ?? "",
       "svix-signature": req.headers.get("svix-signature") ?? "",
-    }) as typeof event;
+    }); // throws if the signature is invalid
+    event = JSON.parse(payload) as typeof event;
   } catch {
     return new Response("Invalid signature", { status: 401 });
   }

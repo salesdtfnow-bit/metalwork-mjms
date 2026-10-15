@@ -66,7 +66,7 @@ export async function importAll(db: DB, backup: Backup, opts: { verifyChecksum?:
   const targetTables = new Set(await appTables(db));
   const fks = (await foreignKeys(db)).filter((f) => targetTables.has(f.table));
   // Base data inserted by migrations/bootstrap must be cleared (target must be empty otherwise).
-  const nonEmpty = [];
+  const nonEmpty: string[] = [];
   for (const t of targetTables) {
     const [{ n }] = await queryRows<{ n: number }>(db, sql.raw(`select count(*)::int as n from "${t}"`));
     if (n > 0) nonEmpty.push(t);
