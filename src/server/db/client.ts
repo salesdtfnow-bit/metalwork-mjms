@@ -66,3 +66,9 @@ export async function createPgliteDb(dataDir: string | undefined, opts: { migrat
 export function migrationsFolder() {
   return process.env.MIGRATIONS_DIR ?? `${process.cwd()}/drizzle`;
 }
+
+/** Runs raw SQL and returns typed rows (both drivers expose `.rows`). */
+export async function queryRows<T>(db: DB, query: import("drizzle-orm").SQL): Promise<T[]> {
+  const res = (await db.execute(query)) as unknown as { rows: T[] };
+  return res.rows;
+}
