@@ -137,8 +137,10 @@ export async function recordDelivery(ctx: Ctx, dispatchId: string, input: { deli
   return mutate(ctx, async (tx) => {
     const [dsp] = await tx.db.select().from(dispatches).where(eq(dispatches.id, dispatchId)).limit(1);
     if (!dsp || dsp.status !== "dispatched") throw invalid("Only dispatched consignments can be marked delivered.");
+    const deliveredAt = input.deliveredAt ? new Date(input.deliveredAt) : new Date();
+    if (dsp.dispatchedAt && deliveredAt.getTime() < dsp.dispatchedAt.getTime() - 86_400_000) throw invalid("The delivery date cannot be before the dispatch date.", { field: "deliveredAt" });
     const podId = pod && pod.size ? (await storeUpload(tx.db, pod, ctx.actor.userId, { isCustomerOriginal: true })).id : null;
-    await tx.db.update(dispatches).set({ status: "delivered", deliveredAt: input.deliveredAt ? new Date(input.deliveredAt) : new Date(), proofOfDeliveryFileId: podId ?? dsp.proofOfDeliveryFileId }).where(eq(dispatches.id, dispatchId));
+    await tx.db.update(dispatches).set({ status: "delivered", deliveredAt, proofOfDeliveryFileId: podId ?? dsp.proofOfDeliveryFileId }).where(eq(dispatches.id, dispatchId));
     await audit(tx, { action: "dispatch.delivered", entityType: "dispatch", entityId: dispatchId, entityRef: dsp.ref, jobId: dsp.jobId, after: { podFileId: podId } });
   });
 }

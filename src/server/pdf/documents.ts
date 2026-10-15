@@ -147,9 +147,6 @@ export async function renderTravellerPdf(ctx: Ctx, jobId: string, baseUrl: strin
       ["Printed", fmtDateTime(new Date())],
     ],
   });
-  const qr = await doc.pdf.embedPng(await qrPng(`${baseUrl}/jobs/${jobId}`));
-  await doc.image(qr, 70);
-  doc.y += 4;
   doc.fields([
     ["Title", job.title],
     ["Customer", cust.name],
@@ -173,8 +170,15 @@ export async function renderTravellerPdf(ctx: Ctx, jobId: string, baseUrl: strin
       [0.06, 0.34, 0.1, 0.16, 0.09, 0.17, 0.08],
     );
   }
-  doc.heading("Operation QR codes (scan to open on the shop floor)");
+  doc.heading("QR codes (scan to open the job or an operation on the shop floor)");
   let x = 40;
+  {
+    const jobQr = await doc.pdf.embedPng(await qrPng(`${baseUrl}/jobs/${jobId}`));
+    doc.ensure(80);
+    doc.page.drawImage(jobQr, { x, y: doc.y - 60, width: 60, height: 60 });
+    doc.page.drawText("Job", { x, y: doc.y - 70, size: 7, font: doc.bold });
+    x += 70;
+  }
   for (const o of ops.filter((x) => x.op.status !== "cancelled").slice(0, 16)) {
     const img = await doc.pdf.embedPng(await qrPng(`${baseUrl}/shopfloor/op/${o.op.id}`));
     if (x > 480) {
@@ -207,7 +211,7 @@ export async function renderTraceabilityPdf(ctx: Ctx, jobId: string) {
   doc.heading("Parts and drawings");
   doc.table(["Line", "Part", "Drawing revision", "Qty", "Accepted", "Released", "Dispatched"], t.lines.map((l) => [l.line.lineNo, `${l.line.partNumber} ${l.line.description}`, l.doc ? `${l.doc.docNumber} rev ${l.drawing?.revision}` : "-", fmtQty(l.line.quantity), fmtQty(l.line.qtyAccepted), fmtQty(l.line.qtyReleased), fmtQty(l.line.qtyDispatched)]), [0.06, 0.32, 0.2, 0.1, 0.1, 0.1, 0.12]);
   doc.heading("Material");
-  doc.table(["Lot", "Heat", "Supplier / PO", "Certificate", "BoxHero ref", "Issued"], t.materials.lots.map((l) => [l.lot.lotNo, l.lot.heatNumber, `${l.supplier.name} / ${l.po.ref}`, l.certificates.map((c) => `${c.certType} ${c.certNumber ?? ""} (${c.verificationResult ?? "unverified"})`).join("; ") || "-", l.stockIn?.boxheroTxId ?? (l.item ? l.item.sku ?? l.item.boxheroItemId : "-"), t.materials.transactions.filter((x) => x.lot.id === l.lot.id && x.t.kind === "issue").map((x) => `${x.t.quantity} ${x.t.ref}`).join(", ")]), [0.12, 0.13, 0.22, 0.25, 0.13, 0.15]);
+  doc.table(["Lot", "Heat", "Supplier / PO", "Certificate", "BoxHero ref", "Issued"], t.materials.lots.map((l) => [l.lot.lotNo, l.lot.heatNumber, `${l.supplier.name} / ${l.po.ref}`, l.certificates.map((c) => `${c.certType} ${c.certNumber ?? ""} (${c.verificationResult ?? "unverified"})`).join("; ") || "-", l.stockIn?.boxheroTxId ?? (l.item ? l.item.sku ?? l.item.boxheroItemId : "-"), t.materials.transactions.filter((x) => x.lot.id === l.lot.id && x.t.kind === "issue").map((x) => `${fmtQty(x.t.quantity)} ${x.lot.uom} (${x.t.ref})`).join(", ")]), [0.12, 0.13, 0.22, 0.25, 0.13, 0.15]);
   doc.heading("Operations, machines, operators, programs");
   doc.table(
     ["Op", "Operation", "Machine", "Operator(s)", "Program rev used", "Good / rej / scrap", "Signed off"],

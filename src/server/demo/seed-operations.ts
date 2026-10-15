@@ -250,7 +250,7 @@ export async function seedDemoOperations(demo: DemoCtx, refs: { customers: Recor
   await approveRelease(qm, rel.id, { qtyReleased: "120", password: PW(), comments: "All records reviewed" });
   const d1 = await createDispatch(dispatchCtx, { jobId: j1.job.id, lines: [{ jobLineId: j1.line.id, quantity: "120" }], carrier: "Express Freight UK", trackingRef: "EF123456789GB", packageCount: "2", grossWeightKg: "14", certificatesIncluded: "Certificate of Conformity; EN 10204 3.1 material certificate" });
   await confirmDispatch(dispatchCtx, d1.id);
-  await recordDelivery(dispatchCtx, d1.id, { deliveredAt: iso(days(-1)) }, pdf("pod.pdf", "proof of delivery"));
+  await recordDelivery(dispatchCtx, d1.id, {}, pdf("pod.pdf", "proof of delivery"));
   await transitionJob(planner, j1.job.id, "completed");
 
   // ═══ JOB 2 — Northfield manifold: op10 done, op20 running, op30 heat treat subcontract, NCR open ═══

@@ -6,6 +6,7 @@ import { loadActor } from "../auth/session";
 import type { Ctx } from "../context";
 import { addAddress, addContact, addCustomerRequirement, createCustomer, createSupplier, setSupplierApproval } from "../services/parties";
 import { seedDemoOperations } from "./seed-operations";
+import { applyRealisticDemoTimings } from "./timings";
 
 /** Fictitious people. Emails use the reserved .test TLD. */
 export const DEMO_USERS = [
@@ -127,6 +128,7 @@ export async function seedDemo(db: DB, opts: { password: string }) {
 
   const demo: DemoCtx = { db, admin, byEmail };
   const ops = await seedDemoOperations(demo, { customers: { kestrel, northfield, severn, ardent }, suppliers: { midmet, westal, covht, bright, pcal, tooltec, freight } });
+  await applyRealisticDemoTimings(db);
 
   return { users: DEMO_USERS.length, customers: 4, suppliers: 7, ...ops };
 }

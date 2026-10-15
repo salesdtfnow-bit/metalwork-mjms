@@ -179,7 +179,8 @@ export class Doc {
         x += cw[i];
       });
       this.y -= h;
-      this.page.drawLine({ start: { x: M, y: this.y + 4 }, end: { x: M + W, y: this.y + 4 }, thickness: 0.4, color: LINE });
+      // separator sits between the previous row's descenders and the next row's cap height
+      this.page.drawLine({ start: { x: M, y: this.y + size + 1.5 }, end: { x: M + W, y: this.y + size + 1.5 }, thickness: 0.4, color: LINE });
     }
     this.y -= 6;
   }

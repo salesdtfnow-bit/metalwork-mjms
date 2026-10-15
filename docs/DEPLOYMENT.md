@@ -32,11 +32,14 @@ To run locally against a real PostgreSQL, set `DATABASE_URL` and `DATABASE_URL_U
 8. **Security.** Enable Vercel deployment protection for preview deployments. Add a firewall rate-limit rule on `/login` and `/api/*`.
 
 ### Demo environment
-Set `DEMO_MODE=true` (shows the banner). Then seed once from a trusted machine:
+1. Set `DEMO_MODE=true`. This shows the demonstration banner, and on the next build `scripts/migrate.ts` seeds the fictitious workshop automatically, **only if the database has no customers**.
+2. Set `DEMO_PASSWORD` to a private value. Otherwise the default documented in the README is used, which anyone who reads it could sign in with.
+
+To seed manually from a trusted machine instead:
 ```bash
 DATABASE_URL=$DATABASE_URL_UNPOOLED DEMO_PASSWORD='…' npm run db:seed:demo
 ```
-The seed refuses to run against a database that already contains non-demo data.
+Both paths refuse to run against a database that already contains non-demo data. **Never set `DEMO_MODE` on a production deployment.**
 
 ## Updating
 Push to `main`. Vercel builds, runs `scripts/migrate.ts` (forward-only, versioned SQL migrations in `drizzle/`) and deploys. Schema changes are made by editing `src/server/db/schema/*` and running `npm run db:generate`. Commit the generated SQL with the change.
