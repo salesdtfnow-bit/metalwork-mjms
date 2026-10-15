@@ -7,7 +7,7 @@ import { fmtDateTime } from "@/lib/format";
 import { Badge, Empty, NotYet, PageHeader, Panel, Section, Table, Tabs } from "@/components/ui";
 import { ActionForm, Disclosure, FileField } from "@/components/forms";
 import { InboxActions } from "../_components/InboxActions";
-import { importEmlAction } from "../actions";
+import { importEmlAction, restoreEmailAction } from "../actions";
 
 export const metadata = { title: "Email inbox" };
 
@@ -129,6 +129,11 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
                   <Link href={`/enquiries/${m.enquiryId}?tab=emails`} className="link">
                     Open enquiry
                   </Link>
+                )}
+                {m.status === "ignored" && (
+                  <ActionForm action={restoreEmailAction} submitLabel="Restore" submitVariant="secondary" submitSize="sm">
+                    <input type="hidden" name="emailId" value={m.id} />
+                  </ActionForm>
                 )}
               </td>
             </tr>

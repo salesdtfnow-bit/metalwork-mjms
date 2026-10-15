@@ -319,6 +319,7 @@ export async function customerHistory(ctx: Ctx, customerId: string) {
 }
 
 export async function listPartyFiles(ctx: Ctx, owner: { customerId?: string; supplierId?: string }) {
+  requirePermission(ctx, owner.customerId ? "customers.view" : "suppliers.view");
   const { files } = await import("../db/schema");
   return ctx.db
     .select({ pf: partyFiles, file: files })
@@ -326,4 +327,14 @@ export async function listPartyFiles(ctx: Ctx, owner: { customerId?: string; sup
     .innerJoin(files, eq(files.id, partyFiles.fileId))
     .where(owner.customerId ? eq(partyFiles.customerId, owner.customerId) : eq(partyFiles.supplierId, owner.supplierId!))
     .orderBy(desc(partyFiles.createdAt));
+}
+
+export async function setSupplierActive(ctx: Ctx, id: string, active: boolean, reason: string) {
+  requirePermission(ctx, "suppliers.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [s] = await tx.db.update(suppliers).set({ isActive: active }).where(eq(suppliers.id, id)).returning();
+    if (!s) throw notFound("Supplier");
+    await audit(tx, { action: active ? "supplier.reactivate" : "supplier.deactivate", entityType: "supplier", entityId: id, entityRef: s.code, reason });
+  });
 }

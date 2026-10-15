@@ -5,7 +5,7 @@ import { activeHolds, listCorrectiveActions, listNcrs } from "@/server/services/
 import { userOptions } from "@/server/services/ui/quality";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/format";
 import { NCR_STATUS } from "@/lib/status";
-import { Badge, LinkButton, Notice, PageHeader, Ref, Section, StatusBadge, Table, Tabs } from "@/components/ui";
+import { Badge, LinkButton, Notice, PageHeader, Ref, StatusBadge, Table, Tabs } from "@/components/ui";
 import { ActionForm, Disclosure, FormGrid, SelectField, TextArea, TextField } from "@/components/forms";
 import { CapaCard } from "./_components/CapaCard";
 import { createCapaAction, releaseHoldAction } from "./actions";

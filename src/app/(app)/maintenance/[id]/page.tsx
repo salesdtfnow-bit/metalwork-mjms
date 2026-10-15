@@ -8,9 +8,9 @@ import { workOrderExtras } from "@/server/services/ui/workshop";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/format";
 import { MACHINE_STATUS, MWO_STATUS, PRIORITY } from "@/lib/status";
 import { Badge, KeyValues, Notice, Section, StatusBadge, TitleBlock } from "@/components/ui";
-import { ActionForm, CheckboxField, FileField, FormGrid, TextArea, TextField } from "@/components/forms";
+import { ActionForm, CheckboxField, Disclosure, FileField, FormGrid, TextArea, TextField } from "@/components/forms";
 import { kindLabel } from "../_components/vocab";
-import { completeWorkOrderAction, startWorkOrderAction } from "../actions";
+import { cancelWorkOrderAction, completeWorkOrderAction, startWorkOrderAction } from "../actions";
 
 export const metadata = { title: "Maintenance work order" };
 
@@ -119,6 +119,23 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ id: 
                 <FileField label="Service report" name="report" hint="Optional — e.g. engineer's job sheet (PDF)." />
                 <CheckboxField label="Return machine to service" name="returnToService" defaultChecked hint={`Sets ${machine.code} to Available.`} />
               </ActionForm>
+            </div>
+            <div className="mt-4">
+              <Disclosure label="Cancel work order" variant="ghost">
+                <ActionForm
+                  action={cancelWorkOrderAction}
+                  submitLabel="Cancel work order"
+                  submitVariant="danger"
+                  confirm={
+                    wo.status === "in_progress" && wo.locksMachine
+                      ? `The work order is cancelled and ${machine.code} is set back to Available. Only do this if the work is genuinely not needed.`
+                      : "The work order is cancelled. This cannot be undone — raise a new work order if the work is needed later."
+                  }
+                >
+                  <input type="hidden" name="id" value={wo.id} />
+                  <TextArea label="Reason" name="reason" required rows={2} />
+                </ActionForm>
+              </Disclosure>
             </div>
           </Section>
         )}

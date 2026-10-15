@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { action } from "@/server/action";
 import { f } from "@/server/forms";
-import { addAddress, addContact, attachPartyFile, createSupplier, setSupplierApproval, updateSupplier } from "@/server/services/parties";
+import { addAddress, addContact, attachPartyFile, createSupplier, setSupplierActive, setSupplierApproval, updateSupplier } from "@/server/services/parties";
 
 const supplierForm = z.object({
   code: f.str("Code is required."),
@@ -95,4 +95,14 @@ export const attachSupplierFileAction = action(
     return "File attached.";
   },
   { revalidate: (i) => `/suppliers/${i.ownerId}` },
+);
+
+export const setSupplierActiveAction = action(
+  "supplier.active",
+  z.object({ id: f.uuid(), active: f.bool(), reason: f.str("A reason is required.") }),
+  async (ctx, { id, active, reason }) => {
+    await setSupplierActive(ctx, id, active, reason);
+    return active ? "Supplier reactivated." : "Supplier deactivated.";
+  },
+  { revalidate: (i) => [`/suppliers/${i.id}`, "/suppliers"] },
 );

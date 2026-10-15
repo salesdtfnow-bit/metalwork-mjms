@@ -199,7 +199,7 @@ export async function operatorTimeReport(ctx: Ctx, f: { from: string; to: string
 }
 
 export async function ncrReport(ctx: Ctx, f: { from?: string; to?: string; category?: string; supplierId?: string }) {
-  requireAnyPermission(ctx, "reports.view", "ncr.view");
+  requireAnyPermission(ctx, "reports.view", "reports.management", "ncr.view");
   return ctx.db
     .select({ n: ncrs, job: jobs.jobNumber, supplier: suppliers.name })
     .from(ncrs)
@@ -212,7 +212,7 @@ export async function ncrReport(ctx: Ctx, f: { from?: string; to?: string; categ
 
 /** Supplier performance: on-time receipts and NCR counts. */
 export async function supplierPerformance(ctx: Ctx) {
-  requireAnyPermission(ctx, "reports.view", "suppliers.view");
+  requireAnyPermission(ctx, "reports.view", "reports.management", "suppliers.view");
   const rows = await ctx.db.select().from(suppliers).where(eq(suppliers.isActive, true));
   const out = [];
   for (const s of rows) {

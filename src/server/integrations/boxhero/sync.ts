@@ -217,7 +217,7 @@ export async function syncCatalogue(db: DB, adapter?: InventoryAdapter) {
 }
 
 export async function integrationStatus(ctx: Ctx) {
-  requirePermission(ctx, "boxhero.view");
+  if (!ctx.actor.permissions.has("boxhero.view") && !ctx.actor.permissions.has("integrations.view")) requirePermission(ctx, "boxhero.view");
   const inv = await getInventoryAdapter(ctx.db);
   const [state] = await ctx.db.select().from(integrationState).where(eq(integrationState.key, "boxhero"));
   const counts = await ctx.db

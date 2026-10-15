@@ -9,9 +9,9 @@ import { subcontractExtras } from "@/server/services/ui/workshop";
 import { fmtDate, fmtDateTime, fmtMoney, fmtQty, todayISO } from "@/lib/format";
 import { INSPECTION_STATUS, OP_STATUS, SUBCON_STATUS } from "@/lib/status";
 import { Badge, KeyValues, Notice, Ref, Section, StatusBadge, Table, TitleBlock, cx } from "@/components/ui";
-import { ActionForm, FileField, FormGrid, TextField } from "@/components/forms";
+import { ActionForm, Disclosure, FileField, FormGrid, TextArea, TextField } from "@/components/forms";
 import { processLabel } from "../_components/vocab";
-import { receiveSubcontractAction, sendSubcontractAction } from "../actions";
+import { cancelSubcontractAction, receiveSubcontractAction, sendSubcontractAction } from "../actions";
 
 export const metadata = { title: "Subcontract order" };
 
@@ -179,6 +179,14 @@ export default async function SubcontractOrderPage({ params }: { params: Promise
                     <TextField label="Dispatch note ref." name="dispatchNoteRef" />
                   </FormGrid>
                 </ActionForm>
+              </div>
+              <div className="mt-4">
+                <Disclosure label="Cancel order" variant="ghost">
+                  <ActionForm action={cancelSubcontractAction} submitLabel="Cancel subcontract order" submitVariant="danger" confirm="The draft order is cancelled. The operation becomes available for a new subcontract order.">
+                    <input type="hidden" name="id" value={sco.id} />
+                    <TextArea label="Reason" name="reason" required rows={2} />
+                  </ActionForm>
+                </Disclosure>
               </div>
             </Section>
           )}

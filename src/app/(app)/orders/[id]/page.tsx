@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageCtx } from "@/server/auth/next";
-import { getCustomerOrder } from "@/server/services/orders";
+import { acceptedRevisionsFor, getCustomerOrder } from "@/server/services/orders";
 import { formatAddress } from "@/server/services/parties";
 import { entityHistory, listActiveUsers } from "@/server/services/ui/sales";
 import { can, canAny } from "@/server/context";
@@ -11,9 +11,9 @@ import { trimQty } from "@/lib/decimal";
 import { fmtDate, fmtDateTime, fmtMoney, fmtQty } from "@/lib/format";
 import { JOB_STATUS, ORDER_STATUS, PRIORITY, QUOTE_STATUS } from "@/lib/status";
 import { KeyValues, Ref, Section, StatusBadge, Table, Tabs, TitleBlock } from "@/components/ui";
-import { ActionForm, FileField, FormGrid, SelectField, SignatureBlock, TextArea, TextField } from "@/components/forms";
+import { ActionForm, Disclosure, FileField, FormGrid, SelectField, SignatureBlock, TextArea, TextField } from "@/components/forms";
 import { AuditList } from "@/components/AuditList";
-import { convertToJobAction, verifyOrderAction } from "../actions";
+import { cancelOrderAction, convertToJobAction, linkQuotationAction, verifyOrderAction } from "../actions";
 
 export const metadata = { title: "Customer order" };
 
@@ -50,7 +50,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const canVerify = can(ctx.actor, "orders.verify") && o.status === "received";
   const canConvert = can(ctx.actor, "jobs.create") && o.status === "verified";
   const quoteOk = quote?.rev.status === "accepted" && !!quote.rev.acceptanceVerifiedAt;
-  const [users, history] = await Promise.all([canConvert ? listActiveUsers(ctx) : Promise.resolve([]), tab === "history" ? entityHistory(ctx, "customer_order", id) : Promise.resolve([])]);
+  const manage = can(ctx.actor, "orders.manage");
+  const canLink = manage && o.status === "received";
+  const canCancel = manage && !["converted", "cancelled"].includes(o.status);
+  const [users, history, revs] = await Promise.all([
+    canConvert ? listActiveUsers(ctx) : Promise.resolve([]),
+    tab === "history" ? entityHistory(ctx, "customer_order", id) : Promise.resolve([]),
+    canLink && tab === "overview" ? acceptedRevisionsFor(ctx, customer.id) : Promise.resolve([]),
+  ]);
   const seeJobs = canAny(ctx.actor, "jobs.view", "production.view_all");
 
   return (
@@ -60,6 +67,16 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         refNo={o.ref}
         title={`${customer.name} — PO ${o.customerPoNumber}`}
         status={<StatusBadge map={ORDER_STATUS} status={o.status} />}
+        actions={
+          canCancel && (
+            <Disclosure label="Cancel order" variant="ghost">
+              <ActionForm action={cancelOrderAction} submitLabel="Cancel order" submitVariant="danger" confirm={`Cancel order ${o.ref} (PO ${o.customerPoNumber})? It can no longer be verified or converted to a job.`} className="w-[min(420px,80vw)]">
+                <input type="hidden" name="orderId" value={o.id} />
+                <TextArea label="Reason" name="reason" rows={2} required placeholder="e.g. Customer withdrew the PO; duplicate registration" />
+              </ActionForm>
+            </Disclosure>
+          )
+        }
         cells={[
           { label: "Customer PO", value: <span className="plate">{o.customerPoNumber}</span> },
           { label: "PO date", value: fmtDate(o.poDate) },
@@ -132,7 +149,30 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     <Check ok={!!quote}>Quotation revision linked</Check>
                     <Check ok={quoteOk}>Quotation acceptance recorded and verified{quote && !quoteOk && <> (currently {QUOTE_STATUS[quote.rev.status as keyof typeof QUOTE_STATUS]?.label.toLowerCase() ?? quote.rev.status})</>}</Check>
                   </ul>
-                  {!quote && <p className="mb-3 text-[12.5px] text-amber">Linking a quotation to an order after registration is not available yet. Register the PO again with the quotation selected if this one was registered without it.</p>}
+                  {canLink && (
+                    <div className="mb-3">
+                      {revs.length ? (
+                        <Disclosure label={quote ? "Change quotation revision" : "Link quotation revision"} defaultOpen={!quote}>
+                          <ActionForm action={linkQuotationAction} submitLabel={quote ? "Change revision" : "Link revision"} className="w-[min(560px,80vw)]">
+                            <input type="hidden" name="orderId" value={o.id} />
+                            <SelectField
+                              label="Quotation revision"
+                              name="quotationRevisionId"
+                              required
+                              placeholder="Select a revision"
+                              defaultValue={quote?.rev.id}
+                              options={revs.map(({ rev, q }) => ({
+                                value: rev.id,
+                                label: `${q.ref} rev ${rev.revisionNo} — ${q.title} — ${QUOTE_STATUS[rev.status as keyof typeof QUOTE_STATUS]?.label ?? rev.status}${rev.acceptanceVerifiedAt ? "" : rev.acceptanceRecordedAt ? " (acceptance not yet verified)" : ""}`,
+                              }))}
+                            />
+                          </ActionForm>
+                        </Disclosure>
+                      ) : (
+                        !quote && <p className="text-[12.5px] text-amber">This customer has no sent or accepted quotation revisions to link.</p>
+                      )}
+                    </div>
+                  )}
                   {canVerify ? (
                     <ActionForm action={verifyOrderAction} submitLabel="Sign contract review">
                       <input type="hidden" name="orderId" value={o.id} />

@@ -66,7 +66,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
       />
       {revs.length === 0 && (
         <Notice tone="warning" title="No sent or accepted quotation for this customer.">
-          You can still register the PO now, but it cannot be verified or converted to a job without an accepted, verified quotation revision — and a quotation cannot be linked after registration.
+          You can still register the PO now and link the quotation revision on the order page later. It cannot be verified or converted to a job until that revision is accepted and verified.
         </Notice>
       )}
       <Panel className="max-w-5xl p-4">

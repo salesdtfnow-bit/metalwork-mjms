@@ -154,6 +154,17 @@ export async function workOrderExtras(ctx: Ctx, wo: { planId: string | null; ser
   return { plan: plan ?? null, provider: provider ?? null, reportedBy: name(wo.reportedBy), completedBy: name(wo.completedBy), report: report ?? null };
 }
 
+/** Deactivated maintenance plans (listMaintenancePlans returns active ones only). */
+export async function inactiveMaintenancePlans(ctx: Ctx) {
+  requirePermission(ctx, "maintenance.view");
+  return ctx.db
+    .select({ p: maintenancePlans, machine: machines.code })
+    .from(maintenancePlans)
+    .innerJoin(machines, eq(machines.id, maintenancePlans.machineId))
+    .where(eq(maintenancePlans.isActive, false))
+    .orderBy(asc(machines.code), asc(maintenancePlans.title));
+}
+
 // ───────────── Subcontract ─────────────
 
 /**

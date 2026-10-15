@@ -2,13 +2,13 @@ import Link from "next/link";
 import { requirePageCtx } from "@/server/auth/next";
 import { can } from "@/server/context";
 import { calibrationDue, listMaintenancePlans, listWorkOrders } from "@/server/services/maintenance";
-import { employeeOptions, machineOptions, maintenanceProviders } from "@/server/services/ui/workshop";
+import { employeeOptions, inactiveMaintenancePlans, machineOptions, maintenanceProviders } from "@/server/services/ui/workshop";
 import { addDaysISO, daysBetween, fmtDate, fmtDateTime, fmtQty, todayISO } from "@/lib/format";
 import { MWO_STATUS, PRIORITY } from "@/lib/status";
 import { Badge, LinkButton, PageHeader, Ref, Section, StatusBadge, Table, Tabs, cx } from "@/components/ui";
 import { ActionForm, Disclosure, FormGrid, SelectField, TextArea, TextField } from "@/components/forms";
 import { INSTRUMENT_STATUS, kindLabel } from "./_components/vocab";
-import { savePlanAction } from "./actions";
+import { savePlanAction, setPlanActiveAction } from "./actions";
 
 export const metadata = { title: "Maintenance" };
 
@@ -95,7 +95,7 @@ async function WorkOrders({ ctx, scope, today }: { ctx: PageCtx; scope: "open" |
 }
 
 async function Plans({ ctx, manage, today }: { ctx: PageCtx; manage: boolean; today: string }) {
-  const rows = await listMaintenancePlans(ctx);
+  const [rows, inactive] = await Promise.all([listMaintenancePlans(ctx), inactiveMaintenancePlans(ctx)]);
   const [machines, employees, providers] = manage ? await Promise.all([machineOptions(ctx), employeeOptions(ctx), maintenanceProviders(ctx)]) : [[], [], []];
   return (
     <Section title="Preventive maintenance plans" actions={<span className="text-[12px] text-steel">Preventive work orders are raised automatically 7 days before a plan falls due.</span>}>
@@ -120,9 +120,12 @@ async function Plans({ ctx, manage, today }: { ctx: PageCtx; manage: boolean; to
               </td>
               <td>
                 {manage && (
-                  <Disclosure label="Edit" variant="ghost">
-                    <PlanForm machines={machines} employees={employees} providers={providers} plan={p} />
-                  </Disclosure>
+                  <div className="flex flex-col gap-1.5">
+                    <Disclosure label="Edit" variant="ghost">
+                      <PlanForm machines={machines} employees={employees} providers={providers} plan={p} />
+                    </Disclosure>
+                    <PlanActiveForm id={p.id} active={false} />
+                  </div>
                 )}
               </td>
             </tr>
@@ -136,7 +139,44 @@ async function Plans({ ctx, manage, today }: { ctx: PageCtx; manage: boolean; to
           </Disclosure>
         </div>
       )}
+      {inactive.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-1.5 text-[13px] font-semibold text-ink">Deactivated plans ({inactive.length})</h3>
+          <Table head={["Machine", "Plan", "Interval", "Last done", ""]}>
+            {inactive.map(({ p, machine }) => (
+              <tr key={p.id} className="text-steel">
+                <td className="plate text-[12.5px]">{machine}</td>
+                <td>
+                  {p.title} <Badge tone="muted">Inactive</Badge>
+                </td>
+                <td>Every {p.intervalDays} days</td>
+                <td>{fmtDate(p.lastDoneOn)}</td>
+                <td>{manage && <PlanActiveForm id={p.id} active />}</td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+      )}
     </Section>
+  );
+}
+
+/** Deactivate (active=false) or reactivate (active=true) a plan, with a reason. */
+function PlanActiveForm({ id, active }: { id: string; active: boolean }) {
+  return (
+    <Disclosure label={active ? "Reactivate" : "Deactivate"} variant="ghost">
+      <ActionForm
+        action={setPlanActiveAction}
+        submitLabel={active ? "Reactivate plan" : "Deactivate plan"}
+        submitVariant={active ? "primary" : "danger"}
+        submitSize="sm"
+        confirm={active ? undefined : "No further preventive work orders will be raised from this plan until it is reactivated. Existing work orders are not changed."}
+      >
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="active" value={active ? "true" : "false"} />
+        <TextArea label="Reason" name="reason" required rows={2} />
+      </ActionForm>
+    </Disclosure>
   );
 }
 

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { action } from "@/server/action";
 import { f } from "@/server/forms";
-import { completeWorkOrder, raiseWorkOrder, saveMaintenancePlan, startWorkOrder } from "@/server/services/maintenance";
+import { cancelWorkOrder, completeWorkOrder, raiseWorkOrder, saveMaintenancePlan, setMaintenancePlanActive, startWorkOrder } from "@/server/services/maintenance";
 import { dtField } from "../planning/_components/parse";
 
 export const raiseWorkOrderAction = action(
@@ -65,4 +65,24 @@ export const completeWorkOrderAction = action(
     return returnToService ? "Work order completed and the machine returned to service." : "Work order completed. The machine status was not changed.";
   },
   { revalidate: (i) => [`/maintenance/${i.id}`, "/maintenance", "/planning"] },
+);
+
+export const cancelWorkOrderAction = action(
+  "maintenance.cancel",
+  z.object({ id: f.uuid(), reason: f.str("Give a reason for cancelling.") }),
+  async (ctx, { id, reason }) => {
+    await cancelWorkOrder(ctx, id, reason);
+    return "Work order cancelled.";
+  },
+  { revalidate: (i) => [`/maintenance/${i.id}`, "/maintenance", "/planning"] },
+);
+
+export const setPlanActiveAction = action(
+  "maintenance.plan_active",
+  z.object({ id: f.uuid(), active: f.bool(), reason: f.str("Give a reason.") }),
+  async (ctx, { id, active, reason }) => {
+    await setMaintenancePlanActive(ctx, id, active, reason);
+    return active ? "Plan reactivated." : "Plan deactivated. No further preventive work orders will be raised from it.";
+  },
+  { revalidate: "/maintenance" },
 );

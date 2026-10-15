@@ -156,7 +156,6 @@ export async function convertOrderToJob(ctx: Ctx, orderId: string, raw: z.input<
         packagingRequirements: [cust.packagingRequirements, ...reqs.filter((r) => r.kind === "packaging").map((r) => r.description)].filter(Boolean).join("\n") || null,
         deliveryRequirements: cust.deliveryPreferences,
         materialRequirements: [...new Set(chosen.map((l) => l.materialSpec).filter(Boolean))].join("; ") || null,
-        nextAction: "Authorise job, plan route and order material",
         createdBy: ctx.actor.userId,
       })
       .returning();
@@ -239,4 +238,31 @@ export async function acceptedRevisionsFor(ctx: Ctx, customerId: string) {
     .innerJoin(quotations, eq(quotations.id, quotationRevisions.quotationId))
     .where(and(eq(quotations.customerId, customerId), inArray(quotationRevisions.status, ["accepted", "awaiting_response", "sent"])))
     .orderBy(desc(quotationRevisions.createdAt));
+}
+
+/** Links the accepted quotation revision to a registered (unverified) order. */
+export async function linkQuotationToOrder(ctx: Ctx, orderId: string, quotationRevisionId: string) {
+  requirePermission(ctx, "orders.manage");
+  return mutate(ctx, async (tx) => {
+    const [o] = await tx.db.select().from(customerOrders).where(eq(customerOrders.id, orderId)).limit(1);
+    if (!o) throw notFound("Customer order");
+    if (o.status !== "received") throw invalid("The quotation can only be changed before the order is verified.");
+    const [r] = await tx.db.select({ rev: quotationRevisions, q: quotations }).from(quotationRevisions).innerJoin(quotations, eq(quotations.id, quotationRevisions.quotationId)).where(eq(quotationRevisions.id, quotationRevisionId)).limit(1);
+    if (!r || r.q.customerId !== o.customerId) throw invalid("The quotation revision does not belong to this customer.");
+    await tx.db.update(customerOrders).set({ quotationRevisionId }).where(eq(customerOrders.id, orderId));
+    await audit(tx, { action: "order.link_quotation", entityType: "customer_order", entityId: orderId, entityRef: o.ref, before: { quotationRevisionId: o.quotationRevisionId }, after: { quotationRevisionId } });
+  });
+}
+
+export async function cancelCustomerOrder(ctx: Ctx, orderId: string, reason: string) {
+  requirePermission(ctx, "orders.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [o] = await tx.db.select().from(customerOrders).where(eq(customerOrders.id, orderId)).limit(1);
+    if (!o) throw notFound("Customer order");
+    if (o.status === "converted") throw invalid("This order has a job — cancel the job instead.");
+    if (o.status === "cancelled") throw invalid("Order is already cancelled.");
+    await tx.db.update(customerOrders).set({ status: "cancelled", notes: [o.notes, `Cancelled: ${reason}`].filter(Boolean).join("\n") }).where(eq(customerOrders.id, orderId));
+    await audit(tx, { action: "order.cancel", entityType: "customer_order", entityId: orderId, entityRef: o.ref, reason });
+  });
 }

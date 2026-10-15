@@ -269,7 +269,8 @@ export async function listJobs(ctx: Ctx, opts: { q?: string; status?: string; cu
       ),
     )
     .orderBy(asc(jobs.priority), sql`${jobs.requiredDate} asc nulls last`, desc(jobs.createdAt))
-    .limit(500);
+    .limit(500)
+    .then((rows) => rows.map((r) => ({ ...r, job: { ...r.job, nextAction: suggestedNextAction(r.job) } })));
 }
 
 export async function getJob(ctx: Ctx, jobId: string) {
@@ -298,6 +299,7 @@ export async function getJob(ctx: Ctx, jobId: string) {
   const showCommercial = can(ctx.actor, "jobs.view_commercial");
   return {
     ...row,
+    job: { ...row.job, nextAction: suggestedNextAction(row.job) },
     order: row.order && !showCommercial ? { ...row.order, orderValue: null } : row.order,
     lines: lines.map((l) => (showCommercial ? l : { ...l, line: { ...l.line, unitPrice: null } })),
     quote,
@@ -314,4 +316,37 @@ export async function availableTransitions(ctx: Ctx, jobId: string) {
     .from(statusTransitions)
     .where(and(eq(statusTransitions.entityType, "job"), eq(statusTransitions.isActive, true), or(eq(statusTransitions.fromStatus, j.status), eq(statusTransitions.fromStatus, "*"))));
   return rules.filter((r) => can(ctx.actor, r.permission as never) && !TERMINAL.includes(j.status as JobStatus) && r.toStatus !== j.status);
+}
+
+const LEGACY_DEFAULT_NEXT_ACTION = "Authorise job, plan route and order material";
+
+/** Suggested next action from the job's state (used unless a planner has set one explicitly). */
+export function suggestedNextAction(job: Pick<typeof jobs.$inferSelect, "status" | "authorisedAt" | "holdReason" | "nextAction">): string {
+  if (job.nextAction && job.nextAction !== LEGACY_DEFAULT_NEXT_ACTION) return job.nextAction;
+  const map: Partial<Record<JobStatus, string>> = {
+    order_confirmed: job.authorisedAt ? "Plan the route and order material" : "Authorise the job",
+    awaiting_material: "Receive material from the supplier",
+    material_received: "Inspect and release received material",
+    awaiting_material_release: "Inspect, verify certificates and release material",
+    ready_for_planning: "Release the route and schedule operations",
+    planned: "Prepare programs and material for production",
+    awaiting_programming: "Write the CNC programs",
+    programming_in_progress: "Complete the CNC programs",
+    awaiting_program_approval: "Approve and release the CNC programs",
+    ready_for_production: "Start setup on the first operation",
+    in_setup: "Complete setup",
+    awaiting_first_off: "First-off inspection",
+    in_production: "Continue production",
+    partially_completed: "Continue with the next operations",
+    awaiting_inspection: "Complete the inspection",
+    on_hold: `Resolve hold${job.holdReason ? `: ${job.holdReason}` : ""}`,
+    non_conformance: "Disposition the non-conformance",
+    rework_required: "Complete rework and reinspection",
+    subcontracted: "Await return from subcontractor",
+    production_complete: "Final inspection and quality release",
+    final_qc: "Approve final quality release",
+    ready_for_dispatch: "Prepare and confirm dispatch",
+    dispatched: "Confirm delivery and close the job",
+  };
+  return map[job.status as JobStatus] ?? "";
 }

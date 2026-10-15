@@ -9,6 +9,8 @@ import { AppError } from "@/server/errors";
 import { fmtDateTime } from "@/lib/format";
 import { Badge, KeyValues, LinkButton, Notice, Section, Table, TitleBlock } from "@/components/ui";
 import { InboxActions } from "../../_components/InboxActions";
+import { ActionForm } from "@/components/forms";
+import { restoreEmailAction } from "../../actions";
 
 export const metadata = { title: "Inbound email" };
 
@@ -56,6 +58,11 @@ export default async function InboundEmailPage({ params }: { params: Promise<{ i
               <a href={`/api/files/${m.rawFileId}`} className="link text-[13px]">
                 Download original .eml
               </a>
+            )}
+            {m.status === "ignored" && (
+              <ActionForm action={restoreEmailAction} submitLabel="Restore to unassigned" submitVariant="secondary" submitSize="sm">
+                <input type="hidden" name="emailId" value={m.id} />
+              </ActionForm>
             )}
             {m.enquiryId && (
               <LinkButton href={`/enquiries/${m.enquiryId}?tab=emails`} size="sm">

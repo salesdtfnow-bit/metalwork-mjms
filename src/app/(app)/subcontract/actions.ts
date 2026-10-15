@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { action } from "@/server/action";
 import { f } from "@/server/forms";
-import { createSubcontractOrder, receiveFromSubcontractor, sendToSubcontractor } from "@/server/services/subcontract";
+import { cancelSubcontractOrder, createSubcontractOrder, receiveFromSubcontractor, sendToSubcontractor } from "@/server/services/subcontract";
 
 export const createSubcontractAction = action(
   "subcontract.create",
@@ -39,6 +39,16 @@ export const receiveSubcontractAction = action(
   async (ctx, { id, certificates, ...input }) => {
     const insp = await receiveFromSubcontractor(ctx, id, input, certificates);
     return `Parts received. Incoming inspection ${insp.ref} opened — the operation completes only when that inspection is accepted.`;
+  },
+  { revalidate: (i) => [`/subcontract/${i.id}`, "/subcontract"] },
+);
+
+export const cancelSubcontractAction = action(
+  "subcontract.cancel",
+  z.object({ id: f.uuid(), reason: f.str("Give a reason for cancelling.") }),
+  async (ctx, { id, reason }) => {
+    await cancelSubcontractOrder(ctx, id, reason);
+    return "Subcontract order cancelled. The operation can be subcontracted again.";
   },
   { revalidate: (i) => [`/subcontract/${i.id}`, "/subcontract"] },
 );

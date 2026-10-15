@@ -13,7 +13,8 @@ import { ActionForm, Disclosure, FileField, FormGrid, NumberField, SelectField, 
 import { AuditList } from "@/components/AuditList";
 import { ATTACHMENT_KIND_OPTIONS, DRAWING_KINDS, ENQUIRY_NEXT, OPEN_ENQUIRY, REASON_REQUIRED, RECEIVED_VIA_OPTIONS, attachmentKindLabel, receivedViaLabel } from "../_components/labels";
 import { toLocalInput } from "../_components/time";
-import { addAttachmentsAction, addEnquiryLineAction, registerDrawingAction, setEnquiryStatusAction, updateEnquiryAction } from "../actions";
+import { trimQty } from "@/lib/decimal";
+import { addAttachmentsAction, addEnquiryLineAction, registerDrawingAction, removeEnquiryLineAction, setEnquiryStatusAction, updateEnquiryAction, updateEnquiryLineAction } from "../actions";
 
 function fileSize(n: number) {
   if (n < 1024) return `${n} B`;
@@ -143,7 +144,7 @@ export default async function EnquiryPage({ params, searchParams }: { params: Pr
             </Section>
           )}
           <Section title="Requested parts">
-            <Table head={["#", "Part number", "Description", "Qty", "Drawing", "Material", "Tolerances", "Finish", "Special requirements"]} empty="No lines recorded yet.">
+            <Table head={["#", "Part number", "Description", "Qty", "Drawing", "Material", "Tolerances", "Finish", "Special requirements", ...(editable ? [""] : [])]} empty="No lines recorded yet.">
               {lines.map((l) => (
                 <tr key={l.id}>
                   <td className="text-steel">{l.lineNo}</td>
@@ -158,6 +159,33 @@ export default async function EnquiryPage({ params, searchParams }: { params: Pr
                   <td className="max-w-[160px] whitespace-pre-wrap text-steel">{l.tolerances ?? ""}</td>
                   <td className="max-w-[160px] whitespace-pre-wrap text-steel">{l.surfaceFinish ?? ""}</td>
                   <td className="max-w-[220px] whitespace-pre-wrap text-steel">{l.specialRequirements ?? ""}</td>
+                  {editable && (
+                    <td>
+                      <div className="flex flex-wrap items-start gap-1">
+                        <Disclosure label="Edit" variant="ghost">
+                          <ActionForm action={updateEnquiryLineAction} submitLabel="Save line" className="w-[min(720px,80vw)]">
+                            <input type="hidden" name="enquiryId" value={e.id} />
+                            <input type="hidden" name="lineId" value={l.id} />
+                            <FormGrid cols={3}>
+                              <TextField label="Part number" name="partNumber" required defaultValue={l.partNumber} />
+                              <TextField label="Description" name="description" required defaultValue={l.description} className="sm:col-span-2" />
+                              <NumberField label="Quantity" name="quantity" required defaultValue={trimQty(l.quantity)} />
+                              <TextField label="Drawing number" name="drawingNumber" defaultValue={l.drawingNumber} />
+                              <TextField label="Drawing revision" name="drawingRevision" defaultValue={l.drawingRevision} />
+                              <TextField label="Material grade" name="materialGrade" defaultValue={l.materialGrade} className="sm:col-span-3" />
+                              <TextArea label="Tolerances" name="tolerances" rows={2} defaultValue={l.tolerances} />
+                              <TextArea label="Surface finish" name="surfaceFinish" rows={2} defaultValue={l.surfaceFinish} />
+                              <TextArea label="Special requirements" name="specialRequirements" rows={2} defaultValue={l.specialRequirements} />
+                            </FormGrid>
+                          </ActionForm>
+                        </Disclosure>
+                        <ActionForm action={removeEnquiryLineAction} submitLabel="Remove" submitVariant="ghost" submitSize="sm" confirm={`Remove line ${l.lineNo} (${l.partNumber}) from this enquiry?`}>
+                          <input type="hidden" name="enquiryId" value={e.id} />
+                          <input type="hidden" name="lineId" value={l.id} />
+                        </ActionForm>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </Table>

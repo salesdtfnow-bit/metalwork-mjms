@@ -402,3 +402,39 @@ export async function getInboundEmail(ctx: Ctx, id: string) {
   const atts = await ctx.db.select({ a: inboundEmailAttachments, f: files }).from(inboundEmailAttachments).innerJoin(files, eq(files.id, inboundEmailAttachments.fileId)).where(eq(inboundEmailAttachments.inboundEmailId, id));
   return { email: m, attachments: atts };
 }
+
+export async function updateEnquiryLine(ctx: Ctx, lineId: string, raw: z.input<typeof enquiryLineInput>) {
+  requirePermission(ctx, "enquiries.manage");
+  const l = enquiryLineInput.parse(raw);
+  return mutate(ctx, async (tx) => {
+    const [line] = await tx.db.select().from(enquiryLines).where(eq(enquiryLines.id, lineId)).limit(1);
+    if (!line) throw notFound("Enquiry line");
+    const [e] = await tx.db.select().from(enquiries).where(eq(enquiries.id, line.enquiryId)).limit(1);
+    if (CLOSED.includes(e.status)) throw invalid("Closed enquiries cannot be edited.");
+    await tx.db.update(enquiryLines).set(l).where(eq(enquiryLines.id, lineId));
+    await audit(tx, { action: "enquiry.line_update", entityType: "enquiry", entityId: e.id, entityRef: e.ref, before: line, after: l });
+  });
+}
+
+export async function removeEnquiryLine(ctx: Ctx, lineId: string) {
+  requirePermission(ctx, "enquiries.manage");
+  return mutate(ctx, async (tx) => {
+    const [line] = await tx.db.select().from(enquiryLines).where(eq(enquiryLines.id, lineId)).limit(1);
+    if (!line) throw notFound("Enquiry line");
+    const [e] = await tx.db.select().from(enquiries).where(eq(enquiries.id, line.enquiryId)).limit(1);
+    if (CLOSED.includes(e.status)) throw invalid("Closed enquiries cannot be edited.");
+    await tx.db.delete(enquiryLines).where(eq(enquiryLines.id, lineId));
+    await audit(tx, { action: "enquiry.line_remove", entityType: "enquiry", entityId: e.id, entityRef: e.ref, before: line });
+  });
+}
+
+export async function restoreEmail(ctx: Ctx, inboundEmailId: string) {
+  requirePermission(ctx, "email.import");
+  return mutate(ctx, async (tx) => {
+    const [m] = await tx.db.select().from(inboundEmails).where(eq(inboundEmails.id, inboundEmailId)).limit(1);
+    if (!m) throw notFound("Email");
+    if (m.status !== "ignored") throw invalid("Only ignored emails can be restored.");
+    await tx.db.update(inboundEmails).set({ status: "unassigned" }).where(eq(inboundEmails.id, inboundEmailId));
+    await audit(tx, { action: "email.restore", entityType: "inbound_email", entityId: inboundEmailId });
+  });
+}

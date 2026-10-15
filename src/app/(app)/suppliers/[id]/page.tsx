@@ -14,7 +14,7 @@ import { ActionForm, CheckboxField, Disclosure, FileField, FormGrid, SelectField
 import { AuditList } from "@/components/AuditList";
 import { SupplierForm } from "../_components/SupplierForm";
 import { ApprovalBadge, APPROVAL_OPTIONS, categoryLabel } from "../_components/approval";
-import { addSupplierAddressAction, addSupplierContactAction, attachSupplierFileAction, setApprovalAction, updateSupplierAction } from "../actions";
+import { addSupplierAddressAction, addSupplierContactAction, attachSupplierFileAction, setApprovalAction, setSupplierActiveAction, updateSupplierAction } from "../actions";
 
 export default async function SupplierPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const ctx = await requirePageCtx("suppliers.view");
@@ -50,6 +50,23 @@ export default async function SupplierPage({ params, searchParams }: { params: P
             <ApprovalBadge status={s.approvalStatus} expiresOn={s.approvalExpiresOn} today={today} />
             {!s.isActive && <Badge tone="muted">Inactive</Badge>}
           </>
+        }
+        actions={
+          manage && (
+            <Disclosure label={s.isActive ? "Deactivate" : "Reactivate"} variant="ghost">
+              <ActionForm
+                action={setSupplierActiveAction}
+                submitLabel={s.isActive ? "Deactivate supplier" : "Reactivate supplier"}
+                submitVariant={s.isActive ? "danger" : "primary"}
+                confirm={s.isActive ? "Deactivated suppliers cannot be used on new purchase orders or subcontract orders. Existing records are kept." : undefined}
+                className="w-[min(420px,80vw)]"
+              >
+                <input type="hidden" name="id" value={s.id} />
+                <input type="hidden" name="active" value={s.isActive ? "false" : "true"} />
+                <TextArea label="Reason" name="reason" rows={2} required placeholder={s.isActive ? "e.g. Ceased trading; replaced by another supplier" : "e.g. Re-engaged after review"} />
+              </ActionForm>
+            </Disclosure>
+          )
         }
         cells={[
           { label: "Categories", value: s.categories.length ? s.categories.map(categoryLabel).join(", ") : "—" },

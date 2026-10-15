@@ -22,6 +22,9 @@ import {
   importEmlUpload,
   linkEmailToEnquiry,
   registerAttachmentAsDocument,
+  removeEnquiryLine,
+  restoreEmail,
+  updateEnquiryLine,
   setEnquiryStatus,
   updateEnquiry,
 } from "@/server/services/enquiries";
@@ -200,6 +203,48 @@ export const ignoreEmailAction = action(
   async (ctx, { emailId, reason }) => {
     await ignoreEmail(ctx, emailId, reason);
     return "Email moved to Ignored.";
+  },
+  { revalidate: (i) => ["/enquiries/inbox", `/enquiries/inbox/${i.emailId}`] },
+);
+
+export const updateEnquiryLineAction = action(
+  "enquiry.line_update",
+  z.object({
+    enquiryId: f.uuid(),
+    lineId: f.uuid(),
+    partNumber: f.str("Part number is required."),
+    description: f.str("Description is required."),
+    quantity: f.dec({ msg: "Enter a quantity." }),
+    drawingNumber: f.optStr(),
+    drawingRevision: f.optStr(),
+    materialGrade: f.optStr(),
+    tolerances: f.optStr(),
+    surfaceFinish: f.optStr(),
+    specialRequirements: f.optStr(),
+  }),
+  async (ctx, { enquiryId: _e, lineId, ...line }) => {
+    await updateEnquiryLine(ctx, lineId, line);
+    return `Line ${line.partNumber} saved.`;
+  },
+  { revalidate: (i) => `/enquiries/${i.enquiryId}` },
+);
+
+export const removeEnquiryLineAction = action(
+  "enquiry.line_remove",
+  z.object({ enquiryId: f.uuid(), lineId: f.uuid() }),
+  async (ctx, { lineId }) => {
+    await removeEnquiryLine(ctx, lineId);
+    return "Line removed.";
+  },
+  { revalidate: (i) => `/enquiries/${i.enquiryId}` },
+);
+
+export const restoreEmailAction = action(
+  "email.restore",
+  z.object({ emailId: f.uuid() }),
+  async (ctx, { emailId }) => {
+    await restoreEmail(ctx, emailId);
+    return "Email moved back to Unassigned.";
   },
   { revalidate: (i) => ["/enquiries/inbox", `/enquiries/inbox/${i.emailId}`] },
 );

@@ -40,20 +40,22 @@ export function ActionForm({
   const [state, formAction] = useActionState(action, null);
   const formRef = useRef<HTMLFormElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  // A client-generated key protects against duplicate submissions (double-click / retry).
-  const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
+  // Duplicate-submission key: attached at submit time and reused until a response arrives, so a
+  // double-click (or retry while pending) sends the same key and the server rejects the duplicate.
+  const keyRef = useRef<{ key: string; forState: ActionResult | null } | null>(null);
+  const submit = (fd: FormData) => {
+    if (!keyRef.current || keyRef.current.forState !== state) keyRef.current = { key: crypto.randomUUID(), forState: state };
+    fd.set("_key", keyRef.current.key);
+    return formAction(fd);
+  };
 
   useEffect(() => {
-    if (state?.ok) {
-      if (resetOnSuccess) formRef.current?.reset();
-      setSubmissionKey(crypto.randomUUID());
-    }
+    if (state?.ok && resetOnSuccess) formRef.current?.reset();
   }, [state, resetOnSuccess]);
 
   return (
     <ErrorsCtx.Provider value={state && !state.ok ? state.fieldErrors : undefined}>
-      <form ref={formRef} action={formAction} className={cx(inline ? "flex flex-wrap items-end gap-2" : "space-y-3", className)} noValidate={false}>
-        <input type="hidden" name="_key" value={submissionKey} />
+      <form ref={formRef} action={submit} className={cx(inline ? "flex flex-wrap items-end gap-2" : "space-y-3", className)} noValidate={false}>
         {state && <ResultBanner state={state} />}
         {children}
         {!hideSubmit &&

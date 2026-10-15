@@ -56,7 +56,8 @@ export async function updateUser(
         .set({ ...(raw.name !== undefined ? { name: raw.name.trim() } : {}), ...(raw.employeeId !== undefined ? { employeeId: raw.employeeId } : {}) })
         .where(eq(users.id, userId));
     }
-    if (raw.roleKeys) {
+    const rolesChanged = !!raw.roleKeys && (raw.roleKeys.length !== before.roles.length || raw.roleKeys.some((k) => !before.roles.includes(k)));
+    if (raw.roleKeys && rolesChanged) {
       if (userId === ctx.actor.userId && !raw.roleKeys.includes("admin") && before.roles.includes("admin"))
         throw invalid("You cannot remove your own administrator role.");
       const roleRows = await tx.db.select().from(roles).where(inArray(roles.key, raw.roleKeys));

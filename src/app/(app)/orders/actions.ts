@@ -5,7 +5,7 @@ import { z } from "zod";
 import { action } from "@/server/action";
 import { f } from "@/server/forms";
 import { invalid } from "@/server/errors";
-import { convertOrderToJob, registerCustomerOrder, verifyCustomerOrder } from "@/server/services/orders";
+import { cancelCustomerOrder, convertOrderToJob, linkQuotationToOrder, registerCustomerOrder, verifyCustomerOrder } from "@/server/services/orders";
 
 const TRACE = ["job", "batch", "piece"] as const;
 
@@ -75,4 +75,24 @@ export const convertToJobAction = action(
     redirect(`/jobs/${job.id}`);
   },
   { revalidate: (i) => [`/orders/${i.orderId}`, "/orders", "/jobs"] },
+);
+
+export const linkQuotationAction = action(
+  "order.link_quotation",
+  z.object({ orderId: f.uuid(), quotationRevisionId: f.uuid("Select a quotation revision.") }),
+  async (ctx, i) => {
+    await linkQuotationToOrder(ctx, i.orderId, i.quotationRevisionId);
+    return "Quotation revision linked to the order.";
+  },
+  { revalidate: (i) => [`/orders/${i.orderId}`, "/orders"] },
+);
+
+export const cancelOrderAction = action(
+  "order.cancel",
+  z.object({ orderId: f.uuid(), reason: f.str("A reason is required.") }),
+  async (ctx, i) => {
+    await cancelCustomerOrder(ctx, i.orderId, i.reason);
+    return "Order cancelled.";
+  },
+  { revalidate: (i) => [`/orders/${i.orderId}`, "/orders"] },
 );
