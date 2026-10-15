@@ -43,8 +43,11 @@ export async function customer(ctx: Ctx) {
 }
 
 /** Runs enquiry → quotation → review → send → acceptance → verified PO → job. */
-export async function jobFromScratch(t: Team, opts: { qty?: string; lines?: { partNumber: string; description: string }[] } = {}) {
-  const cust = await customer(t.sales.ctx);
+export async function jobFromScratch(
+  t: Team,
+  opts: { qty?: string; lines?: { partNumber: string; description: string; drawingRevisionId?: string }[]; customer?: { id: string } } = {},
+) {
+  const cust = opts.customer ?? (await customer(t.sales.ctx));
   const enq = await createEnquiry(t.sales.ctx, { customerId: cust.id, subject: "Machined brackets", receivedVia: "email" }, [
     { partNumber: "BRK-100", description: "Bracket", quantity: opts.qty ?? "50", materialGrade: "6082-T6" },
   ]);
