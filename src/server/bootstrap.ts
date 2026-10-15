@@ -68,7 +68,9 @@ export function defaultJobTransitions() {
 
 /** Idempotent: safe to run on every deploy. Never overwrites admin edits to existing rows. */
 export async function ensureBaseData(db: DB) {
-  await db.insert(companySettings).values({ id: 1 }).onConflictDoNothing();
+  // COMPANY_NAME (optional) names a brand-new installation; afterwards the name is edited in Admin → Settings.
+  const companyName = process.env.COMPANY_NAME?.trim();
+  await db.insert(companySettings).values({ id: 1, ...(companyName ? { companyName } : {}) }).onConflictDoNothing();
 
   for (const [key, r] of Object.entries(SYSTEM_ROLES)) {
     const [existing] = await db.select().from(roles).where(eq(roles.key, key)).limit(1);

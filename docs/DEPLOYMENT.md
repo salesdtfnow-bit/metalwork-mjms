@@ -36,6 +36,26 @@ To run locally against a real PostgreSQL, set `DATABASE_URL` and `DATABASE_URL_U
 - **The app accepts `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or a prefixed form** (e.g. `STORAGE_DATABASE_URL` if a custom prefix was chosen when connecting), plus the matching unpooled variable for migrations. See `src/server/db/url.ts`.
 - **`/api/health` returns 503.** The running app cannot reach the database. Vercel → Logs shows `[health] database check failed: …`.
 
+### Going live from a demo deployment
+The build can wipe the demonstration data and create the first administrator, so no database credentials have to leave Vercel.
+1. In *Settings → Environment Variables* (Production):
+   - **Delete:** `DEMO_MODE`, `DEMO_PASSWORD`.
+   - **Add:** `MJMS_RESET_DEMO_DATABASE=true`.
+   - **Add:** `ADMIN_EMAIL`, `ADMIN_NAME` and `ADMIN_PASSWORD` (a temporary password, at least 10 characters).
+   - **Optional:** `COMPANY_NAME`.
+2. **Redeploy.** The build log should show:
+   - `demonstration data removed`;
+   - `Migrations and base data applied.`;
+   - `Administrator created: …`.
+3. **Delete** `MJMS_RESET_DEMO_DATABASE` and `ADMIN_PASSWORD`. Leaving them set is harmless but untidy:
+   - The reset refuses to run once any real account exists.
+   - An existing administrator is never changed.
+4. **Sign in.** You must choose a new password straight away. Then:
+   - Complete *Admin → Settings*: address, VAT and company numbers, logo, quotation terms.
+   - Create the other users in *Admin → Users*.
+
+The reset only runs on a database flagged as a demo whose only accounts are `@demo.test` users. Anything else is refused and nothing is deleted.
+
 ### Demo environment
 1. Set `DEMO_MODE=true`. This shows the demonstration banner, and on the next build `scripts/migrate.ts` seeds the fictitious workshop automatically, **only if the database has no customers**.
 2. Set `DEMO_PASSWORD` to a private value. Otherwise the default documented in the README is used, which anyone who reads it could sign in with.
