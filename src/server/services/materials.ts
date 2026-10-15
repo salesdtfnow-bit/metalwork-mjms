@@ -107,7 +107,7 @@ export async function receiveMaterial(
   return mutate(ctx, async (tx) => {
     const [po] = await tx.db.select().from(purchaseOrders).where(eq(purchaseOrders.id, input.purchaseOrderId)).limit(1);
     if (!po) throw notFound("Purchase order");
-    if (!["sent", "partially_received", "approved"].includes(po.status)) throw invalid(`Cannot receive against a PO that is ${po.status}.`);
+    if (!["sent", "partially_received"].includes(po.status)) throw invalid(`Cannot receive against a PO that is ${po.status}.`);
     const dnFileId = deliveryNoteFile && deliveryNoteFile.size ? (await storeUpload(tx.db, deliveryNoteFile, ctx.actor.userId)).id : null;
     const ref = await nextRef(tx.db, REF.receipt);
     const [receipt] = await tx.db
@@ -552,6 +552,7 @@ export async function jobMaterialStatus(ctx: Ctx, jobId: string) {
 }
 
 export async function listMaterialSpecs(ctx: Ctx) {
+  requireAnyPermission(ctx, "materials.view", "purchasing.view", "quality.view");
   const specs = await ctx.db.select().from(materialSpecs).orderBy(asc(materialSpecs.code));
   const links = await ctx.db.select({ link: materialSpecItems, item: boxheroItems }).from(materialSpecItems).innerJoin(boxheroItems, eq(boxheroItems.id, materialSpecItems.boxheroItemId));
   return specs.map((s) => ({ ...s, items: links.filter((l) => l.link.materialSpecId === s.id) }));
@@ -559,6 +560,7 @@ export async function listMaterialSpecs(ctx: Ctx) {
 
 /** Released lots with unallocated quantity matching a spec (allocation picker). */
 export async function availableLots(ctx: Ctx, materialSpecId?: string | null) {
+  requireAnyPermission(ctx, "materials.allocate", "materials.view");
   const lots = await ctx.db
     .select({ lot: materialLots, spec: materialSpecs.code })
     .from(materialLots)

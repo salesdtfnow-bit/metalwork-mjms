@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
+Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP, toExpNeg: -30, toExpPos: 40 });
 
 export { Decimal };
 export type Num = Decimal.Value | null | undefined;

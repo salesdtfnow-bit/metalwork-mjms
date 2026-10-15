@@ -128,9 +128,9 @@ export async function purchasingDashboard(ctx: Ctx) {
   const [openPos, overdue, lotsCert, failedSync, requirements] = await Promise.all([
     ctx.db.select({ po: purchaseOrders, supplier: suppliers.name }).from(purchaseOrders).innerJoin(suppliers, eq(suppliers.id, purchaseOrders.supplierId)).where(notInArray(purchaseOrders.status, ["received", "closed", "cancelled"])).orderBy(asc(purchaseOrders.requiredDate)),
     overdueDeliveries(ctx),
-    ctx.db.select({ l: materialLots, supplier: suppliers.name }).from(materialLots).innerJoin(suppliers, eq(suppliers.id, materialLots.supplierId)).where(inArray(materialLots.certificateStatus, ["pending", "rejected"])),
+    ctx.db.select({ l: materialLots, supplier: suppliers.name }).from(materialLots).innerJoin(suppliers, eq(suppliers.id, materialLots.supplierId)).where(and(inArray(materialLots.certificateStatus, ["pending", "received", "rejected"]), notInArray(materialLots.status, ["rejected", "returned", "consumed"]))),
     ctx.db.select().from(stockSyncTransactions).where(inArray(stockSyncTransactions.status, ["failed", "needs_reconciliation"])),
-    ctx.db.select({ job: jobs }).from(jobs).where(inArray(jobs.status, ["order_confirmed", "awaiting_material", "ready_for_planning", "planned"])),
+    jobsNeedingMaterial(ctx),
   ]);
   const expected = await ctx.db
     .select({ l: purchaseOrderLines, po: purchaseOrders, supplier: suppliers.name })
@@ -237,3 +237,19 @@ export function toCsv(rows: Record<string, unknown>[]): string {
 }
 
 export const _k = { isNull, finalReleases };
+
+/** Authorised open jobs with material-consuming operations but no active allocation of released material. */
+async function jobsNeedingMaterial(ctx: Ctx) {
+  const { materialAllocations } = await import("../db/schema");
+  const candidates = await ctx.db
+    .selectDistinct({ job: jobs })
+    .from(jobs)
+    .innerJoin(operations, eq(operations.jobId, jobs.id))
+    .where(and(notInArray(jobs.status, ["completed", "cancelled", "dispatched", "ready_for_dispatch"]), eq(operations.requiresMaterial, true), notInArray(operations.status, ["complete", "cancelled"])));
+  const out = [];
+  for (const c of candidates) {
+    const alloc = await ctx.db.select({ id: materialAllocations.id }).from(materialAllocations).where(and(eq(materialAllocations.jobId, c.job.id), eq(materialAllocations.status, "active"))).limit(1);
+    if (!alloc.length) out.push(c);
+  }
+  return out;
+}

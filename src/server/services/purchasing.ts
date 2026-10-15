@@ -2,7 +2,7 @@ import { and, asc, desc, eq, ilike, inArray, lt, notInArray, or, sql } from "dri
 import { z } from "zod";
 import { jobs, materialSpecs, purchaseOrderLines, purchaseOrders, purchaseRequisitions, suppliers, users } from "../db/schema";
 import { audit } from "../audit";
-import { mutate, requirePermission, type Ctx } from "../context";
+import { mutate, requireAnyPermission, requirePermission, type Ctx } from "../context";
 import { forbidden, invalid, notFound } from "../errors";
 import { nextRef, REF } from "../refs";
 import { d, money2, sum } from "@/lib/decimal";
@@ -44,7 +44,7 @@ export const poInput = z.object({
   kind: z.enum(["material", "subcontract", "tooling", "service"]).default("material"),
   requiredDate: z.string().nullish(),
   supplierReference: z.string().nullish(),
-  currency: z.string().length(3).default("GBP"),
+  currency: z.string().trim().length(3).transform((s) => s.toUpperCase()).default("GBP"),
   deliveryInstructions: z.string().nullish(),
   notes: z.string().nullish(),
 });
@@ -200,6 +200,7 @@ export async function listRequisitions(ctx: Ctx, status = "open") {
 
 /** PO lines past their required date and not fully received. */
 export async function overdueDeliveries(ctx: Ctx) {
+  requireAnyPermission(ctx, "purchasing.view", "reports.view", "reports.management", "planning.view");
   return ctx.db
     .select({ l: purchaseOrderLines, po: purchaseOrders, supplier: suppliers.name, job: jobs.jobNumber })
     .from(purchaseOrderLines)
@@ -208,4 +209,49 @@ export async function overdueDeliveries(ctx: Ctx) {
     .leftJoin(jobs, eq(jobs.id, purchaseOrderLines.jobId))
     .where(and(inArray(purchaseOrders.status, ["sent", "partially_received"]), inArray(purchaseOrderLines.status, ["open", "partially_received"]), lt(purchaseOrderLines.requiredDate, todayISO())))
     .orderBy(asc(purchaseOrderLines.requiredDate));
+}
+
+/** Closes a PO (no further receipts expected). Remaining open lines are marked cancelled. */
+export async function closePurchaseOrder(ctx: Ctx, poId: string, reason: string) {
+  requirePermission(ctx, "purchasing.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [po] = await tx.db.select().from(purchaseOrders).where(eq(purchaseOrders.id, poId)).limit(1);
+    if (!po) throw notFound("Purchase order");
+    if (["closed", "cancelled", "draft"].includes(po.status)) throw invalid(`Purchase order is ${po.status}.`);
+    await tx.db.update(purchaseOrderLines).set({ status: "cancelled" }).where(and(eq(purchaseOrderLines.purchaseOrderId, poId), inArray(purchaseOrderLines.status, ["open", "partially_received"])));
+    await tx.db.update(purchaseOrders).set({ status: "closed" }).where(eq(purchaseOrders.id, poId));
+    await audit(tx, { action: "po.close", entityType: "purchase_order", entityId: poId, entityRef: po.ref, reason });
+  });
+}
+
+/** Updates the unit price of an open PO line (e.g. a PO raised from requisitions) — before receipt only. */
+export async function updatePurchaseOrderLinePrice(ctx: Ctx, lineId: string, unitPrice: string, reason?: string | null) {
+  requirePermission(ctx, "purchasing.manage");
+  if (!/^\d+(\.\d+)?$/.test(unitPrice)) throw invalid("Enter a valid price.", { field: "unitPrice" });
+  return mutate(ctx, async (tx) => {
+    const [l] = await tx.db.select().from(purchaseOrderLines).where(eq(purchaseOrderLines.id, lineId)).limit(1);
+    if (!l) throw notFound("PO line");
+    const [po] = await tx.db.select().from(purchaseOrders).where(eq(purchaseOrders.id, l.purchaseOrderId));
+    if (!["draft", "approved"].includes(po.status)) throw invalid("Prices can only be changed before the PO is sent.");
+    if (po.status === "approved" && !reason?.trim()) throw invalid("Give a reason for changing an approved PO.", { field: "reason" });
+    await tx.db.update(purchaseOrderLines).set({ unitPrice }).where(eq(purchaseOrderLines.id, lineId));
+    const lines = await tx.db.select().from(purchaseOrderLines).where(eq(purchaseOrderLines.purchaseOrderId, po.id));
+    const total = money2(sum(lines.map((x) => d(x.quantity).times(d(x.id === lineId ? unitPrice : x.unitPrice)))));
+    // A price change on an approved PO sends it back for approval.
+    await tx.db.update(purchaseOrders).set({ total, ...(po.status === "approved" ? { status: "draft", approvedBy: null, approvedAt: null } : {}) }).where(eq(purchaseOrders.id, po.id));
+    await audit(tx, { action: "po.line_price", entityType: "purchase_order", entityId: po.id, entityRef: po.ref, before: { unitPrice: l.unitPrice }, after: { unitPrice }, reason });
+  });
+}
+
+export async function cancelRequisition(ctx: Ctx, requisitionId: string, reason: string) {
+  requirePermission(ctx, "purchasing.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [r] = await tx.db.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, requisitionId)).limit(1);
+    if (!r) throw notFound("Requisition");
+    if (r.status !== "open") throw invalid(`Requisition is ${r.status}.`);
+    await tx.db.update(purchaseRequisitions).set({ status: "cancelled" }).where(eq(purchaseRequisitions.id, requisitionId));
+    await audit(tx, { action: "requisition.cancel", entityType: "purchase_requisition", entityId: requisitionId, entityRef: r.ref, jobId: r.jobId, reason });
+  });
 }
