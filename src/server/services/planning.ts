@@ -1,9 +1,8 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import {
   cncProgramMachines,
   cncProgramRevisions,
   customers,
-  employees,
   jobLines,
   jobs,
   machineCapabilities,
@@ -20,7 +19,6 @@ import {
 import { audit } from "../audit";
 import { mutate, requirePermission, type Ctx } from "../context";
 import { AppError, invalid, notFound } from "../errors";
-import { d } from "@/lib/decimal";
 import { todayISO, addDaysISO } from "@/lib/format";
 import { addWorkingMinutes, windowMinutes, workingWindows } from "./machines";
 import { hasValidCompetency } from "./employees";
@@ -209,4 +207,3 @@ export async function scheduleHistory(ctx: Ctx, opId: string) {
   return ctx.db.select({ c: scheduleChanges, by: users.name }).from(scheduleChanges).leftJoin(users, eq(users.id, scheduleChanges.changedBy)).where(eq(scheduleChanges.operationId, opId)).orderBy(asc(scheduleChanges.changedAt));
 }
 
-export const _p = { lte, employees, d };

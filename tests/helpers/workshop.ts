@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
 import { boxheroItems, boxheroLocations, machineTypes, operationTypes } from "@/server/db/schema";
 import { saveMachine } from "@/server/services/machines";
@@ -75,4 +74,3 @@ export async function releasedProgram(t: Team, name: string, machineId: string, 
 }
 
 export { file };
-export const _u = { eq };

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { files, jobLines, jobs, operations, subcontractFiles, subcontractOrders, suppliers } from "../db/schema";
 import { audit } from "../audit";
@@ -139,4 +139,3 @@ export async function getSubcontractOrder(ctx: Ctx, id: string) {
   return { ...row, files: docs };
 }
 
-export const _v = { and };

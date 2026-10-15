@@ -192,4 +192,3 @@ export async function releasesForJob(ctx: Ctx, jobId: string) {
   return ctx.db.select({ r: finalReleases, by: users.name }).from(finalReleases).leftJoin(users, eq(users.id, finalReleases.decidedBy)).where(eq(finalReleases.jobId, jobId)).orderBy(desc(finalReleases.createdAt));
 }
 
-export const _r = {};

@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
+import { asc, eq, ilike, inArray, or } from "drizzle-orm";
 import {
   approvals,
   batchMaterials,
@@ -238,4 +238,3 @@ export async function resolveTraceQuery(ctx: Ctx, q: string) {
   return { kind: "none" as const };
 }
 
-export const _t = { and };

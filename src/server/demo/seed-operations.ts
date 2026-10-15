@@ -18,7 +18,7 @@ import { confirmCheck, finishSetup, signOffOperation, startProduction, startSetu
 import { approveRelease, checkReleaseItem, getRelease, prepareRelease } from "../services/release";
 import { confirmDispatch, createDispatch, recordDelivery } from "../services/dispatch";
 import { raiseNcr, updateNcrInvestigation, createCorrectiveAction } from "../services/ncr";
-import { createSubcontractOrder, sendToSubcontractor } from "../services/subcontract";
+import { createSubcontractOrder } from "../services/subcontract";
 import { saveMaintenancePlan, raiseWorkOrder } from "../services/maintenance";
 import { saveTool } from "../services/tooling";
 import { scheduleOperation } from "../services/planning";
@@ -67,7 +67,7 @@ export async function seedDemoOperations(demo: DemoCtx, refs: { customers: Recor
   const m03 = await machine("M03", "Haas VF-4 vertical machining centre", "CNC_MILL", ["MILL", "DRILL"], { manufacturer: "Haas", model: "VF-4", controller: "Haas NGC", axes: "3-axis", location: "Bay 2", hourlyRate: "65" });
   const t01 = await machine("T01", "Doosan Lynx 220 CNC lathe", "CNC_LATHE", ["TURN"], { manufacturer: "Doosan", model: "Lynx 220LSYC", controller: "Fanuc 0i-TF", axes: "2-axis + C + Y, live tooling", location: "Bay 2", hourlyRate: "55" });
   const t02 = await machine("T02", "Mazak QT-200 CNC lathe", "CNC_LATHE", ["TURN"], { manufacturer: "Mazak", model: "Quick Turn 200", controller: "Mazatrol SmoothG", location: "Bay 2", hourlyRate: "55" });
-  const t03 = await machine("T03", "Colchester Triumph manual lathe", "MANUAL_LATHE", ["MTURN"], { manufacturer: "Colchester", model: "Triumph 2000", location: "Bay 3", hourlyRate: "40" });
+  await machine("T03", "Colchester Triumph manual lathe", "MANUAL_LATHE", ["MTURN"], { manufacturer: "Colchester", model: "Triumph 2000", location: "Bay 3", hourlyRate: "40" });
   const s01 = await machine("S01", "Kasto bandsaw", "SAW", ["SAW"], { manufacturer: "Kasto", model: "SBA 260", location: "Goods-in", hourlyRate: "30", allowsConcurrent: false });
   const g01 = await machine("G01", "Jones & Shipman surface grinder", "GRINDER", ["GRIND"], { manufacturer: "Jones & Shipman", model: "540", location: "Bay 3", hourlyRate: "50" });
 

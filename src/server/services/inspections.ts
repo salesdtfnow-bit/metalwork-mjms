@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   calibrationRecords,
@@ -606,4 +606,3 @@ export async function getInstrument(ctx: Ctx, id: string) {
   return { instrument: i, validity: instrumentValid(i), records: recs, flagged };
 }
 
-export const _x = { notInArray };

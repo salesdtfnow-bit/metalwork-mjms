@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import {
   cncProgramRevisions,
   cncPrograms,
@@ -411,4 +411,3 @@ export async function operationWorkspace(ctx: Ctx, opId: string) {
   };
 }
 
-export const _w = { inArray, or };

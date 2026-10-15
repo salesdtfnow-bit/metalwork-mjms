@@ -28,7 +28,7 @@ import {
 } from "../db/schema";
 import { audit } from "../audit";
 import { mutate, requirePermission, requireAnyPermission, type Ctx } from "../context";
-import { forbidden, invalid, notFound } from "../errors";
+import { invalid, notFound } from "../errors";
 import { d } from "@/lib/decimal";
 import { hasValidCompetency } from "./employees";
 import { notify } from "./notifications";
@@ -591,4 +591,3 @@ export async function saveOperationType(ctx: Ctx, input: { id?: string; code: st
   });
 }
 
-export const _z = { forbidden };

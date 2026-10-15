@@ -1,10 +1,9 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, notInArray, sql } from "drizzle-orm";
 import {
   correctiveActions,
   customers,
   dispatches,
   employees,
-  finalReleases,
   inspections,
   jobLines,
   jobs,
@@ -236,7 +235,6 @@ export function toCsv(rows: Record<string, unknown>[]): string {
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\r\n");
 }
 
-export const _k = { isNull, finalReleases };
 
 /** Authorised open jobs with material-consuming operations but no active allocation of released material. */
 async function jobsNeedingMaterial(ctx: Ctx) {
