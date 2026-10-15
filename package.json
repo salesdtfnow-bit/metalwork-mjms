@@ -15,7 +15,9 @@
     "db:seed:demo": "tsx scripts/seed-demo.ts",
     "db:reset:local": "node -e \"require('fs').rmSync('.data/pglite',{recursive:true,force:true})\" && tsx scripts/migrate.ts",
     "admin:create": "tsx scripts/create-admin.ts",
-    "vercel-build": "tsx scripts/migrate.ts && next build"
+    "vercel-build": "tsx scripts/migrate.ts && next build",
+    "backup": "tsx scripts/backup.ts",
+    "restore": "tsx scripts/restore.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",

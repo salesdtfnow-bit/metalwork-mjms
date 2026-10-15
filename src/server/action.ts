@@ -1,5 +1,6 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import type { z } from "zod";
 import { getDb } from "./db/client";
 import { submissionKeys } from "./db/schema";
@@ -49,6 +50,11 @@ export function action<S extends z.ZodType>(
       });
       const paths = typeof opts.revalidate === "function" ? opts.revalidate(parsed.data) : opts.revalidate;
       for (const p of paths ? (Array.isArray(paths) ? paths : [paths]) : []) revalidatePath(p);
+      // Send any queued emails / BoxHero movements right after the response (cron is the safety net).
+      after(async () => {
+        const { runOutboxes } = await import("./jobs/scheduled");
+        await runOutboxes(db).catch((e) => console.error("[outbox]", e));
+      });
       if (typeof res === "string") return { ok: true, message: res };
       return res ?? { ok: true };
     } catch (err) {
