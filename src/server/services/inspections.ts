@@ -420,7 +420,7 @@ export async function completeInspection(
 }
 
 export async function cancelInspection(ctx: Ctx, inspectionId: string, reason: string) {
-  requirePermission(ctx, "quality.inspect");
+  requireAnyPermission(ctx, "quality.inspect", "materials.inspect");
   if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
   return mutate(ctx, async (tx) => {
     const insp = await loadInspection(tx, inspectionId);
@@ -551,7 +551,8 @@ export async function recordCalibration(
     if (!inst) throw notFound("Instrument");
     const dueOn = input.dueOn || addDaysISO(input.calibratedOn, inst.calibrationIntervalDays);
     const fileId = file && file.size ? (await storeUpload(tx.db, file, ctx.actor.userId)).id : null;
-    const [prev] = await tx.db.select().from(calibrationRecords).where(eq(calibrationRecords.instrumentId, instrumentId)).orderBy(desc(calibrationRecords.calibratedOn)).limit(1);
+    // Review window starts at the last calibration that was found in tolerance and passed.
+    const [prev] = await tx.db.select().from(calibrationRecords).where(and(eq(calibrationRecords.instrumentId, instrumentId), eq(calibrationRecords.asFoundInTolerance, true), sql`${calibrationRecords.result} <> 'fail'`)).orderBy(desc(calibrationRecords.calibratedOn)).limit(1);
     const [rec] = await tx.db.insert(calibrationRecords).values({ instrumentId, ...input, dueOn, fileId, recordedBy: ctx.actor.userId }).returning();
     const usable = input.result !== "fail";
     await tx.db
@@ -587,7 +588,7 @@ export async function reviewFlaggedResult(ctx: Ctx, resultId: string, outcome: s
 }
 
 export async function listInstruments(ctx: Ctx) {
-  requireAnyPermission(ctx, "quality.view", "quality.inspect", "quality.instruments");
+  requireAnyPermission(ctx, "quality.view", "quality.inspect", "quality.instruments", "materials.inspect", "quality.final_inspect");
   const today = todayISO();
   const rows = await ctx.db.select().from(measuringInstruments).orderBy(asc(measuringInstruments.assetNo));
   return rows.map((i) => ({ ...i, validity: instrumentValid(i, today) }));

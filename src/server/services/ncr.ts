@@ -192,6 +192,7 @@ export async function approveDisposition(
   }
   return mutate(ctx, async (tx) => {
     const n = await loadNcr(tx, id);
+    if (["rework", "repair"].includes(disposition) && !n.jobLineId) throw invalid("Rework and repair need the NCR to be linked to a job line (the rework operation is added to its route). Link a job or choose another disposition.");
     if (["closed", "cancelled", "in_rework", "awaiting_reinspection"].includes(n.status)) throw invalid(`NCR is ${n.status.replace(/_/g, " ")}.`);
     const approval = await signApproval(tx, {
       kind: "ncr.disposition",
@@ -362,7 +363,23 @@ export async function cancelNcr(ctx: Ctx, id: string, reason: string) {
   return mutate(ctx, async (tx) => {
     const n = await loadNcr(tx, id);
     if (n.disposition) throw invalid("An NCR with an approved disposition cannot be cancelled — close it instead.");
+    const active = await tx.db.select().from(holds).where(and(eq(holds.ncrId, id), isNull(holds.releasedAt)));
+    if (active.length && !can(ctx.actor, "holds.release")) throw forbidden("Cancelling releases this NCR's holds, which requires the hold-release permission.");
     await tx.db.update(ncrs).set({ status: "cancelled", closureNotes: reason, closedBy: ctx.actor.userId, closedAt: new Date() }).where(eq(ncrs.id, id));
+    for (const h of active) {
+      await tx.db.update(holds).set({ releasedBy: ctx.actor.userId, releasedAt: new Date(), releaseReason: `NCR ${n.ref} cancelled: ${reason}` }).where(eq(holds.id, h.id));
+      if (h.operationId) {
+        const [op] = await tx.db.select().from(operations).where(eq(operations.id, h.operationId)).limit(1);
+        const still = await tx.db.select().from(holds).where(and(eq(holds.operationId, h.operationId), isNull(holds.releasedAt)));
+        if (op?.status === "on_hold" && !still.length) await tx.db.update(operations).set({ status: await resumeStatusFor(tx, op), statusBeforeHold: null }).where(eq(operations.id, op.id));
+      }
+      if (h.batchId) await tx.db.update(batches).set({ status: "in_progress" }).where(eq(batches.id, h.batchId));
+      if (h.lotId) await tx.db.update(materialLots).set({ status: "awaiting_inspection" }).where(and(eq(materialLots.id, h.lotId), eq(materialLots.status, "quarantined")));
+      if (h.targetType === "job" && h.jobId) {
+        const [j] = await tx.db.select().from(jobs).where(eq(jobs.id, h.jobId)).limit(1);
+        if (j?.status === "on_hold") await tx.db.update(jobs).set({ status: j.statusBeforeHold ?? "order_confirmed", statusBeforeHold: null, holdReason: null }).where(eq(jobs.id, h.jobId));
+      }
+    }
     await audit(tx, { action: "ncr.cancel", entityType: "ncr", entityId: id, entityRef: n.ref, jobId: n.jobId, reason });
   });
 }
@@ -452,6 +469,7 @@ export async function listCorrectiveActions(ctx: Ctx, open = true) {
 }
 
 export async function activeHolds(ctx: Ctx) {
+  if (!can(ctx.actor, "ncr.view") && !can(ctx.actor, "holds.release") && !can(ctx.actor, "jobs.hold")) throw forbidden();
   return ctx.db
     .select({ h: holds, job: jobs.jobNumber, op: operations.opNumber, lot: materialLots.lotNo, ncr: ncrs.ref })
     .from(holds)
