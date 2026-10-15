@@ -7,9 +7,11 @@ import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { getDb } from "../src/server/db/client";
 import { exportAll } from "../src/server/backup";
+import { directDatabaseUrl } from "../src/server/db/url";
 
 async function main() {
-  if (process.env.DATABASE_URL_UNPOOLED) process.env.DATABASE_URL = process.env.DATABASE_URL_UNPOOLED;
+  const direct = directDatabaseUrl();
+  if (direct) process.env.DATABASE_URL = direct;
   const db = await getDb();
   const b = await exportAll(db);
   mkdirSync("backups", { recursive: true });

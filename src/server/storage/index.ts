@@ -90,9 +90,9 @@ export async function storeFile(
   if (backend === "memory") memory.set(key, input.bytes);
   else if (backend === "local") {
     const { mkdir, writeFile } = await import("node:fs/promises");
-    const full = path.join(localRoot(), key);
-    await mkdir(path.dirname(full), { recursive: true });
-    await writeFile(full, input.bytes, { flag: "wx" });
+    const full = path.join(/*turbopackIgnore: true*/ localRoot(), key);
+    await mkdir(/*turbopackIgnore: true*/ path.dirname(full), { recursive: true });
+    await writeFile(/*turbopackIgnore: true*/ full, input.bytes, { flag: "wx" });
   } else {
     const { put } = await import("@vercel/blob");
     const res = await put(`mjms/${key}`, input.bytes, { access: "private", contentType: mimeType, addRandomSuffix: false });
@@ -127,9 +127,9 @@ export async function readFileBytes(f: Pick<StoredFile, "storage" | "storageKey"
   }
   if (f.storage === "local") {
     const { readFile } = await import("node:fs/promises");
-    const full = path.join(localRoot(), f.storageKey);
+    const full = path.join(/*turbopackIgnore: true*/ localRoot(), f.storageKey);
     if (!full.startsWith(localRoot())) throw new AppError("Invalid file path.", "forbidden");
-    return readFile(full);
+    return readFile(/*turbopackIgnore: true*/ full);
   }
   const { get } = await import("@vercel/blob");
   const res = await get(f.storageKey, { access: "private" });

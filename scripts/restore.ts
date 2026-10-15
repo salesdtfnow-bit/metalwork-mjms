@@ -7,11 +7,13 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { getDb } from "../src/server/db/client";
 import { importAll, verifyRestore, type Backup } from "../src/server/backup";
+import { directDatabaseUrl } from "../src/server/db/url";
 
 async function main() {
   const file = process.env.RESTORE_FILE;
   if (!file) throw new Error("Set RESTORE_FILE to the backup JSON path");
-  if (process.env.DATABASE_URL_UNPOOLED) process.env.DATABASE_URL = process.env.DATABASE_URL_UNPOOLED;
+  const direct = directDatabaseUrl();
+  if (direct) process.env.DATABASE_URL = direct;
   const backup = JSON.parse(readFileSync(file, "utf8")) as Backup;
   const db = await getDb();
   const r = await importAll(db, backup);

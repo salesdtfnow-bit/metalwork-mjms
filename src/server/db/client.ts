@@ -1,5 +1,6 @@
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
+import { databaseEnvNames, databaseUrl } from "./url";
 
 /**
  * Database handle used by every service. Both the PGlite (local/test) and node-postgres
@@ -16,7 +17,7 @@ const g = globalThis as GlobalWithDb;
 
 /**
  * Lazily creates a single DB handle per process.
- * - DATABASE_URL set (postgres://…)  → node-postgres Pool (Neon on Vercel)
+ * - DATABASE_URL (or POSTGRES_URL / prefixed variant, see ./url) → node-postgres Pool (Neon on Vercel)
  * - otherwise                        → embedded PGlite at PGLITE_DIR (default ./.data/pglite),
  *                                      migrated automatically on first use.
  */
@@ -31,8 +32,8 @@ export function getDb(): Promise<DB> {
 }
 
 async function createDb(): Promise<DB> {
-  const url = process.env.DATABASE_URL;
-  if (url && url.startsWith("postgres")) {
+  const url = databaseUrl();
+  if (url) {
     const { Pool } = await import("pg");
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const pool = new Pool({
@@ -48,7 +49,9 @@ async function createDb(): Promise<DB> {
   }
   if (process.env.VERCEL || process.env.NODE_ENV === "production" && !process.env.ALLOW_PGLITE_IN_PRODUCTION) {
     // Serverless filesystems are ephemeral: never silently fall back to an embedded database.
-    throw new Error("DATABASE_URL is not configured. Connect a PostgreSQL database (e.g. Neon via the Vercel Marketplace).");
+    throw new Error(
+      `DATABASE_URL is not configured. Connect a PostgreSQL database (e.g. Neon via the Vercel Marketplace). Database-like variables present: ${databaseEnvNames().join(", ") || "none"}`,
+    );
   }
   const dir = process.env.PGLITE_DIR ?? "./.data/pglite";
   return createPgliteDb(dir, { migrate: true });
