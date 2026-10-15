@@ -17,7 +17,9 @@
     "admin:create": "tsx scripts/create-admin.ts",
     "vercel-build": "tsx scripts/migrate.ts && next build",
     "backup": "tsx scripts/backup.ts",
-    "restore": "tsx scripts/restore.ts"
+    "restore": "tsx scripts/restore.ts",
+    "smoke:prepare": "tsx scripts/smoke-prepare.ts",
+    "smoke:crawl": "tsx scripts/smoke-crawl.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.10",
