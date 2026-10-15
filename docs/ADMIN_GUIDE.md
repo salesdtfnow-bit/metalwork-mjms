@@ -13,7 +13,7 @@ Administration is under **Administration** in the sidebar. Each tab requires its
 4. **Operation types.** Review the defaults (saw, mill, turn, …). Set whether each type needs a machine and whether it requires a CNC program or a first-off by default.
 5. **Competency catalogue.** One competency per process or machine family that needs authorisation, with an expiry period where applicable.
 6. **Employees** (Operators). Record each employee, grant **verified** competencies (the verifier cannot verify themselves), and add training records.
-7. **Users.** Create an account per person and link operators to their employee record. *Shop-floor actions are refused for an operator whose account has no linked employee.*
+7. **Users.** Create an account per person and link operators to their employee record. *Shop-floor actions are refused for an operator whose account has no linked employee.* Anyone who also works on the shop floor (an administrator who runs machines, for example) can be given an employee record from their user page: *Admin → Users → (user) → Create and link employee record*, or from **My work → Create my employee record**. They keep their roles, appear in My work and can be assigned operations. Independence rules still stop them approving inspections or releases of their own work.
 8. **Suppliers.** Set the approved status, scope and expiry. Purchase and subcontract orders can only be raised to approved or conditional suppliers in the right category.
 9. **Customers**, with delivery addresses and customer-specific requirements. Mandatory requirements are added to every final-release checklist for that customer.
 10. **Measuring instruments**, with calibration records. Overdue instruments cannot be used to record results.

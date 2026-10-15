@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { requirePageCtx } from "@/server/auth/next";
 import { AppError } from "@/server/errors";
+import { can } from "@/server/context";
 import { myWork } from "@/server/services/production";
 import { pendingBlockers } from "@/server/services/ui/shopfloor";
 import { fmtDate, fmtDateTime, fmtMinutes, fmtQty, fmtTime } from "@/lib/format";
@@ -20,12 +21,22 @@ export default async function ShopfloorPage() {
     work = await myWork(ctx);
   } catch (e) {
     if (e instanceof AppError && e.code === "forbidden") {
+      const canSelfLink = can(ctx.actor, "admin.users") && can(ctx.actor, "employees.manage");
       return (
         <div className="mx-auto max-w-3xl text-[16px]">
           <h1 className="plate mb-4 text-[30px] text-ink">My work</h1>
           <Notice tone="warning" title="Your sign-in is not linked to an employee record">
-            {e.message} Until it is linked, the system cannot show the operations assigned to you or record your time.
+            {canSelfLink
+              ? "If you also work on the shop floor, create your employee record. You can then be assigned operations, hold competencies and record your time here."
+              : `${e.message} Until it is linked, the system cannot show the operations assigned to you or record your time.`}
           </Notice>
+          {canSelfLink && (
+            <p className="mt-4">
+              <Link href={`/admin/users/${ctx.actor.userId}`} className={buttonClass("primary", "lg")}>
+                Create my employee record
+              </Link>
+            </p>
+          )}
         </div>
       );
     }

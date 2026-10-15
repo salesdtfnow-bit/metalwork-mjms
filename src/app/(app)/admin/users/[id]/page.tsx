@@ -7,7 +7,7 @@ import { fmtDateTime } from "@/lib/format";
 import { Badge, Notice, Panel, Section, Table, TitleBlock } from "@/components/ui";
 import { ActionForm, CheckboxField, FormGrid, SelectField, TextArea, TextField } from "@/components/forms";
 import { AuditList } from "@/components/AuditList";
-import { resetPasswordAction, setUserActiveAction, updateUserAction } from "../../actions";
+import { createUserEmployeeAction, resetPasswordAction, setUserActiveAction, updateUserAction } from "../../actions";
 
 export default async function UserPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePageCtx("admin.users");
@@ -20,6 +20,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
   const locked = !!u.lockedUntil && u.lockedUntil > now;
   const self = u.id === ctx.actor.userId;
   const roleKeys = new Set(u.roles.map((r) => r.key));
+  const [firstName, ...rest] = u.name.trim().split(/\s+/);
 
   return (
     <>
@@ -78,6 +79,26 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               </fieldset>
             </ActionForm>
           </Panel>
+          {!u.employeeId && (
+            <Panel className="mt-4 p-4">
+              <h3 className="mb-1 font-semibold text-ink">Also works on the shop floor?</h3>
+              <p className="mb-3 text-[13px] text-steel">
+                Create an employee record for this sign-in so they can be assigned operations, hold competencies and use My work. Any role can do this, administrators
+                included. They still cannot approve inspections or releases of their own work.
+              </p>
+              <ActionForm action={createUserEmployeeAction} submitLabel="Create and link employee record">
+                <input type="hidden" name="id" value={u.id} />
+                <FormGrid>
+                  <TextField label="First name" name="firstName" required defaultValue={firstName} />
+                  <TextField label="Last name" name="lastName" required defaultValue={rest.join(" ")} />
+                  <TextField label="Employee ID" name="employeeNo" required hint="Your payroll or clock number, e.g. E101." />
+                  <TextField label="Job title" name="jobTitle" />
+                  <TextField label="Shift" name="shift" />
+                  <TextField label="Badge code" name="badgeCode" hint="Optional. For scanning a badge on shop-floor terminals." />
+                </FormGrid>
+              </ActionForm>
+            </Panel>
+          )}
         </Section>
 
         <div>

@@ -8,7 +8,7 @@ import { requirePermission } from "@/server/context";
 import { invalid } from "@/server/errors";
 import { fmtQty } from "@/lib/format";
 import { verifyAuditChain } from "@/server/audit";
-import { adminResetPassword, createRole, createUser, listRoles, setRolePermissions, setUserActive, updateUser } from "@/server/services/users";
+import { adminResetPassword, createEmployeeForUser, createRole, createUser, listRoles, setRolePermissions, setUserActive, updateUser } from "@/server/services/users";
 import { updateSettings } from "@/server/services/settings";
 import { saveOperationType } from "@/server/services/routing";
 import { addCalendarException, saveCalendar, saveMachineType } from "@/server/services/machines";
@@ -45,6 +45,24 @@ export const updateUserAction = action(
     return "User saved. Their sessions were signed out so the new roles take effect at next sign-in.";
   },
   { revalidate: (i) => ["/admin/users", `/admin/users/${i.id}`] },
+);
+
+export const createUserEmployeeAction = action(
+  "admin.user_employee",
+  z.object({
+    id: f.uuid(),
+    employeeNo: f.str("Employee ID is required."),
+    firstName: f.str("First name is required."),
+    lastName: f.str("Last name is required."),
+    jobTitle: f.optStr(),
+    shift: f.optStr(),
+    badgeCode: f.optStr(),
+  }),
+  async (ctx, { id, ...employee }) => {
+    const e = await createEmployeeForUser(ctx, id, employee);
+    return `Employee record ${e.employeeNo} created and linked. This user can now be assigned operations and use My work; add their competencies under Operators.`;
+  },
+  { revalidate: (i) => ["/admin/users", `/admin/users/${i.id}`, "/operators", "/shopfloor"] },
 );
 
 export const setUserActiveAction = action(

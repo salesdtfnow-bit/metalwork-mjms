@@ -40,6 +40,41 @@ export async function createUser(ctx: Ctx, raw: z.input<typeof createUserInput>)
   });
 }
 
+export const userEmployeeInput = z.object({
+  employeeNo: z.string().trim().min(1, "Employee ID is required."),
+  firstName: z.string().trim().min(1, "First name is required."),
+  lastName: z.string().trim().min(1, "Last name is required."),
+  jobTitle: z.string().trim().nullish(),
+  shift: z.string().trim().nullish(),
+  badgeCode: z.string().trim().nullish(),
+});
+
+/**
+ * Creates the employee record for an existing sign-in and links the two, so the person can be assigned
+ * operations, hold competencies and use My work — e.g. an administrator who also runs machines.
+ * Independence rules still apply: they cannot approve inspections or releases of their own work.
+ */
+export async function createEmployeeForUser(ctx: Ctx, userId: string, raw: z.input<typeof userEmployeeInput>) {
+  requirePermission(ctx, "admin.users");
+  requirePermission(ctx, "employees.manage");
+  const input = userEmployeeInput.parse(raw);
+  return mutate(ctx, async (tx) => {
+    const [u] = await tx.db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!u) throw notFound("User");
+    if (u.employeeId) throw conflict("This user is already linked to an employee record.");
+    const [dup] = await tx.db.select({ id: employees.id }).from(employees).where(eq(employees.employeeNo, input.employeeNo)).limit(1);
+    if (dup) throw conflict(`Employee ID ${input.employeeNo} is already used.`, { field: "employeeNo" });
+    const [e] = await tx.db
+      .insert(employees)
+      .values({ ...input, jobTitle: input.jobTitle || null, shift: input.shift || null, badgeCode: input.badgeCode || null, email: u.email })
+      .returning();
+    await tx.db.update(users).set({ employeeId: e.id }).where(eq(users.id, userId));
+    await audit(tx, { action: "employee.create", entityType: "employee", entityId: e.id, entityRef: e.employeeNo, after: { ...input, email: u.email } });
+    await audit(tx, { action: "user.link_employee", entityType: "user", entityId: u.id, entityRef: u.email, before: { employeeId: null }, after: { employeeId: e.id, employeeNo: e.employeeNo } });
+    return e;
+  });
+}
+
 export async function updateUser(
   ctx: Ctx,
   userId: string,
