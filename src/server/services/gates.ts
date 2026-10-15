@@ -183,6 +183,7 @@ export async function recordGateException(ctx: Ctx, input: { operationId: string
     const [op] = await tx.db.select().from(operations).where(eq(operations.id, input.operationId)).limit(1);
     if (!op) throw invalid("Operation not found.");
     const [job] = await tx.db.select().from(jobs).where(eq(jobs.id, op.jobId));
+    if (["complete", "cancelled"].includes(op.status) || ["completed", "cancelled"].includes(job.status)) throw invalid("The operation or job is closed.");
     const ref = await nextRef(tx.db, REF.gateException);
     const [exc] = await tx.db
       .insert(gateExceptions)
@@ -205,8 +206,9 @@ export async function recordGateException(ctx: Ctx, input: { operationId: string
 
 export async function revokeGateException(ctx: Ctx, exceptionId: string, reason: string) {
   requirePermission(ctx, "production.override_gate");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
   return mutate(ctx, async (tx) => {
-    const [e] = await tx.db.update(gateExceptions).set({ status: "revoked", revokedAt: new Date() }).where(eq(gateExceptions.id, exceptionId)).returning();
+    const [e] = await tx.db.update(gateExceptions).set({ status: "revoked", revokedAt: new Date() }).where(and(eq(gateExceptions.id, exceptionId), eq(gateExceptions.status, "approved"))).returning();
     if (!e) throw invalid("Exception not found.");
     await audit(tx, { action: "gate.exception_revoke", entityType: "operation", entityId: e.operationId, jobId: e.jobId, operationId: e.operationId, exceptionId, reason });
   });

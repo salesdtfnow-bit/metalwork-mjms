@@ -82,3 +82,25 @@ export function addDaysISO(dateIso: string, days: number): string {
   const t = Date.parse(`${dateIso}T00:00:00Z`) + days * 86_400_000;
   return new Date(t).toISOString().slice(0, 10);
 }
+
+/**
+ * Converts a wall-clock date + time in `tz` (e.g. from an <input type="datetime-local">) to a UTC instant.
+ * Handles DST by correcting against the zone's actual offset at that moment.
+ */
+export function zonedToUtc(dateIso: string, hhmm: string, tz = COMPANY_TZ): Date {
+  const guess = new Date(`${dateIso}T${hhmm.length === 5 ? `${hhmm}:00` : hhmm}Z`);
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(guess);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asLocal = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"));
+  return new Date(guess.getTime() - (asLocal - guess.getTime()));
+}
+
+/** Parses a datetime-local string ("YYYY-MM-DDTHH:mm") as company-timezone wall-clock time. */
+export function parseLocalDateTime(v: string, tz = COMPANY_TZ): Date | null {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)$/.exec(v.trim());
+  if (!m) {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return zonedToUtc(m[1], m[2], tz);
+}

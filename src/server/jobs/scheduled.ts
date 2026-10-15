@@ -10,10 +10,11 @@ import { raiseDuePreventiveWork, calibrationDue } from "../services/maintenance"
 import { overdueDeliveries } from "../services/purchasing";
 import { notify } from "../services/notifications";
 import { todayISO, addDaysISO } from "@/lib/format";
+import { ALL_PERMISSIONS } from "../auth/permissions";
 
 export async function systemCtx(db: DB): Promise<Ctx> {
   const id = await getSystemUserId(db);
-  return { db, actor: { userId: id, name: "System (automated)", email: "system", employeeId: null, roles: ["system"], permissions: new Set(), isSystem: true } };
+  return { db, actor: { userId: id, name: "System (automated)", email: "system", employeeId: null, roles: ["system"], permissions: new Set<string>(ALL_PERMISSIONS), isSystem: true } };
 }
 
 /** Frequent: drain outboxes. Safe to run concurrently / repeatedly (idempotent). */

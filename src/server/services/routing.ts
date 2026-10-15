@@ -153,7 +153,9 @@ export async function addOperation(ctx: Ctx, jobLineId: string, raw: z.input<typ
 
 export async function updateOperation(ctx: Ctx, opId: string, raw: Partial<z.input<typeof operationInput>>, reason?: string | null) {
   requirePermission(ctx, "routing.manage");
-  const data = operationInput.partial().parse(raw);
+  // Only fields actually supplied are applied (zod 4 .partial() would otherwise inject defaults).
+  const parsed = operationInput.partial().parse(raw);
+  const data = Object.fromEntries(Object.entries(parsed).filter(([k]) => k in raw)) as typeof parsed;
   return mutate(ctx, async (tx) => {
     const { op, job, line } = await loadOp(tx, opId);
     if (["complete", "cancelled"].includes(op.status)) throw invalid(`Operation ${op.opNumber} is ${op.status}.`);
@@ -349,10 +351,12 @@ export async function assignOperator(ctx: Ctx, opId: string, employeeId: string,
 
 export async function unassignOperator(ctx: Ctx, assignmentId: string, reason: string) {
   requirePermission(ctx, "production.assign");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
   return mutate(ctx, async (tx) => {
-    const [a] = await tx.db.update(operationAssignments).set({ isActive: false, unassignedAt: new Date() }).where(eq(operationAssignments.id, assignmentId)).returning();
-    if (!a) throw notFound("Assignment");
-    await audit(tx, { action: "operation.unassign", entityType: "operation", entityId: a.operationId, operationId: a.operationId, reason });
+    const [a] = await tx.db.update(operationAssignments).set({ isActive: false, unassignedAt: new Date() }).where(and(eq(operationAssignments.id, assignmentId), eq(operationAssignments.isActive, true))).returning();
+    if (!a) throw notFound("Active assignment");
+    const { op, job } = await loadOp(tx, a.operationId);
+    await audit(tx, { action: "operation.unassign", entityType: "operation", entityId: a.operationId, entityRef: `${job.jobNumber}/${op.opNumber}`, jobId: job.id, operationId: a.operationId, reason });
   });
 }
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { machines, maintenancePlans, maintenanceWorkOrders, suppliers, users, measuringInstruments } from "../db/schema";
 import { audit } from "../audit";
 import { mutate, requirePermission, type Ctx } from "../context";
-import { invalid, notFound } from "../errors";
+import { forbidden, invalid, notFound } from "../errors";
 import { nextRef, REF } from "../refs";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { storeUpload } from "../storage";
@@ -135,5 +135,28 @@ export async function getWorkOrder(ctx: Ctx, id: string) {
 
 /** Instruments with calibration due in `days` (or overdue). */
 export async function calibrationDue(ctx: Ctx, days = 30) {
+  if (!["maintenance.view", "quality.view", "quality.instruments", "reports.view", "reports.management"].some((p) => ctx.actor.permissions.has(p))) throw forbidden();
   return ctx.db.select().from(measuringInstruments).where(and(eq(measuringInstruments.calibrationRequired, true), lte(measuringInstruments.calibrationDueOn, addDaysISO(todayISO(), days)), inArray(measuringInstruments.status, ["in_service", "out_of_calibration"]))).orderBy(asc(measuringInstruments.calibrationDueOn));
+}
+
+export async function cancelWorkOrder(ctx: Ctx, id: string, reason: string) {
+  requirePermission(ctx, "maintenance.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [wo] = await tx.db.select().from(maintenanceWorkOrders).where(eq(maintenanceWorkOrders.id, id)).limit(1);
+    if (!wo || ["completed", "cancelled"].includes(wo.status)) throw invalid("Work order is not open.");
+    await tx.db.update(maintenanceWorkOrders).set({ status: "cancelled", findings: [wo.findings, `Cancelled: ${reason}`].filter(Boolean).join("\n") }).where(eq(maintenanceWorkOrders.id, id));
+    if (wo.status === "in_progress" && wo.locksMachine) await setMachineStatusInternal(tx, wo.machineId, "available", `${wo.ref} cancelled`, null);
+    await audit(tx, { action: "maintenance.cancel", entityType: "maintenance_work_order", entityId: id, entityRef: wo.ref, reason });
+  });
+}
+
+export async function setMaintenancePlanActive(ctx: Ctx, id: string, active: boolean, reason: string) {
+  requirePermission(ctx, "maintenance.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [p] = await tx.db.update(maintenancePlans).set({ isActive: active }).where(eq(maintenancePlans.id, id)).returning();
+    if (!p) throw notFound("Maintenance plan");
+    await audit(tx, { action: active ? "maintenance_plan.activate" : "maintenance_plan.deactivate", entityType: "machine", entityId: p.machineId, entityRef: p.title, reason });
+  });
 }

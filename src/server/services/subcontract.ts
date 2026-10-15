@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { files, jobLines, jobs, operations, subcontractFiles, subcontractOrders, suppliers } from "../db/schema";
 import { audit } from "../audit";
@@ -118,9 +118,10 @@ export async function listSubcontractOrders(ctx: Ctx, open = true) {
     .innerJoin(jobs, eq(jobs.id, subcontractOrders.jobId))
     .innerJoin(operations, eq(operations.id, subcontractOrders.operationId))
     .innerJoin(jobLines, eq(jobLines.id, subcontractOrders.jobLineId))
+    .where(open ? notInArray(subcontractOrders.status, ["closed", "cancelled", "accepted"]) : undefined)
     .orderBy(desc(subcontractOrders.createdAt))
-    .limit(300);
-  return open ? rows.filter((r) => !["closed", "cancelled", "accepted"].includes(r.sco.status)) : rows;
+    .limit(open ? 1000 : 300);
+  return rows;
 }
 
 export async function getSubcontractOrder(ctx: Ctx, id: string) {
@@ -139,3 +140,16 @@ export async function getSubcontractOrder(ctx: Ctx, id: string) {
   return { ...row, files: docs };
 }
 
+
+/** Cancels a subcontract order that has not been sent yet. */
+export async function cancelSubcontractOrder(ctx: Ctx, id: string, reason: string) {
+  requirePermission(ctx, "subcontract.manage");
+  if (!reason?.trim()) throw invalid("A reason is required.", { field: "reason" });
+  return mutate(ctx, async (tx) => {
+    const [sco] = await tx.db.select().from(subcontractOrders).where(eq(subcontractOrders.id, id)).limit(1);
+    if (!sco) throw notFound("Subcontract order");
+    if (sco.status !== "draft") throw invalid("Only draft orders can be cancelled. Parts already at the supplier must be received back.");
+    await tx.db.update(subcontractOrders).set({ status: "cancelled", notes: [sco.notes, `Cancelled: ${reason}`].filter(Boolean).join("\n") }).where(eq(subcontractOrders.id, id));
+    await audit(tx, { action: "subcontract.cancel", entityType: "subcontract_order", entityId: id, entityRef: sco.ref, jobId: sco.jobId, operationId: sco.operationId, reason });
+  });
+}

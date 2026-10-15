@@ -272,8 +272,12 @@ export async function releasedProgramsFor(ctx: Ctx, opts: { machineId?: string |
     .where(and(eq(cncPrograms.isActive, true), opts.partId ? or(eq(cncPrograms.partId, opts.partId)) : undefined))
     .orderBy(asc(cncPrograms.programNumber));
   if (!opts.machineId) return rows;
-  const compat = await ctx.db.select().from(cncProgramMachines).where(eq(cncProgramMachines.machineId, opts.machineId));
-  return rows.filter((r) => compat.some((c) => c.programId === r.p.id));
+  // Programs with no machine restriction are usable on any machine (consistent with the gates).
+  const all = rows.length ? await ctx.db.select().from(cncProgramMachines).where(inArray(cncProgramMachines.programId, rows.map((r) => r.p.id))) : [];
+  return rows.filter((r) => {
+    const restr = all.filter((c) => c.programId === r.p.id);
+    return !restr.length || restr.some((c) => c.machineId === opts.machineId);
+  });
 }
 
 /** Programs with any revisions awaiting approval or release. */

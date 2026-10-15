@@ -85,7 +85,8 @@ export async function checkSchedule(ctx: Ctx, opId: string, machineId: string, s
 }
 
 /** Schedules (or reschedules) an operation. Rescheduling requires a reason; every change is logged. */
-export async function scheduleOperation(ctx: Ctx, opId: string, input: { machineId: string; start: Date; reason?: string | null; acceptWarnings?: boolean }) {
+/** Warnings are advisory (returned to the planner); errors block. */
+export async function scheduleOperation(ctx: Ctx, opId: string, input: { machineId: string; start: Date; reason?: string | null }) {
   requirePermission(ctx, "planning.schedule");
   return mutate(ctx, async (tx) => {
     const [op] = await tx.db.select().from(operations).where(eq(operations.id, opId)).limit(1);

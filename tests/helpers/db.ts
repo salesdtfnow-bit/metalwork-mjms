@@ -5,6 +5,7 @@ import { employees, roles, userRoles, users } from "@/server/db/schema";
 import { hashPassword } from "@/server/auth/password";
 import { loadActor } from "@/server/auth/session";
 import type { Actor, Ctx } from "@/server/context";
+import { ALL_PERMISSIONS } from "@/server/auth/permissions";
 
 export const TEST_PASSWORD = "Workshop-Test-Pass-2026";
 let pwHash: string | undefined;
@@ -49,6 +50,6 @@ export async function systemCtx(db: DB): Promise<Ctx> {
   const id = await getSystemUserId(db);
   return {
     db,
-    actor: { userId: id, name: "System", email: "system", employeeId: null, roles: ["system"], permissions: new Set(), isSystem: true },
+    actor: { userId: id, name: "System", email: "system", employeeId: null, roles: ["system"], permissions: new Set<string>(ALL_PERMISSIONS), isSystem: true },
   };
 }

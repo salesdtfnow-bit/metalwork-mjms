@@ -59,7 +59,7 @@ export async function recordToolEvent(ctx: Ctx, toolId: string, input: { kind: "
     }
     if (input.kind === "inspection") {
       patch.nextInspectionDue = t.inspectionIntervalDays ? addDaysISO(todayISO(), t.inspectionIntervalDays) : null;
-      if (input.status) patch.status = input.status;
+      if (input.status) patch.status = z.enum(["available", "in_use", "maintenance", "quarantined", "scrapped", "lost"]).parse(input.status);
     }
     if (input.kind === "status_change") {
       const st = z.enum(["available", "in_use", "maintenance", "quarantined", "scrapped", "lost"]).parse(input.status);
@@ -108,6 +108,7 @@ export async function getTool(ctx: Ctx, id: string) {
 }
 
 export async function toolsDueAttention(ctx: Ctx) {
+  requirePermission(ctx, "tooling.view");
   const all = await ctx.db.select().from(tools).where(and(lte(tools.nextInspectionDue, addDaysISO(todayISO(), 14))));
   return all;
 }

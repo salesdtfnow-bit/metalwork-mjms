@@ -24,6 +24,7 @@ import { audit } from "../audit";
 import { mutate, requirePermission, requireAnyPermission, type Ctx } from "../context";
 import { conflict, invalid, notFound } from "../errors";
 import { MACHINE_STATUS, type MachineStatus } from "@/lib/status";
+import { zonedToUtc } from "@/lib/format";
 
 export const machineInput = z.object({
   code: z.string().trim().min(1, "Machine ID is required.").max(20).transform((s) => s.toUpperCase()),
@@ -210,11 +211,7 @@ export async function workingWindows(ctx: Ctx, calendarId: string | null, from: 
 
 /** Converts a local wall-clock time on a date in `tz` to a UTC instant. */
 export function zonedTime(dateIso: string, hhmm: string, tz: string): Date {
-  const guess = new Date(`${dateIso}T${hhmm}:00Z`);
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(guess);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  const asLocal = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
-  return new Date(guess.getTime() - (asLocal - guess.getTime()));
+  return zonedToUtc(dateIso, hhmm, tz);
 }
 
 export function windowMinutes(ws: ShiftWindow[]) {

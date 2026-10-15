@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseDecimalInput } from "@/lib/decimal";
+import { parseLocalDateTime } from "@/lib/format";
 
 /** FormData → plain object. Repeated keys become arrays; File entries kept as File. */
 export function formToObject(fd: FormData): Record<string, unknown> {
@@ -55,12 +56,12 @@ export const f = {
     }),
   date: (msg = "Enter a date.") => z.preprocess(blankToUndef, z.string({ error: msg }).regex(/^\d{4}-\d{2}-\d{2}$/, msg)),
   optDate: () => z.preprocess(blankToUndef, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.").optional()).transform((v) => v ?? null),
-  /** datetime-local → Date */
+  /** datetime-local → Date, interpreted as company-timezone wall-clock time */
   optDateTime: () =>
     z.preprocess(blankToUndef, z.string().optional()).transform((v, c) => {
       if (!v) return null;
-      const d = new Date(v);
-      if (Number.isNaN(d.getTime())) {
+      const d = parseLocalDateTime(v);
+      if (!d) {
         c.addIssue({ code: "custom", message: "Enter a valid date and time." });
         return z.NEVER;
       }
