@@ -152,6 +152,8 @@ export const SYSTEM_ROLES: Record<string, { name: string; description: string; p
       "reports.export",
       "traceability.view",
       "quotations.review",
+      "quotations.verify_acceptance",
+      "orders.verify",
       "jobs.authorise",
       "jobs.cancel",
       "jobs.hold",
