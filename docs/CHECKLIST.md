@@ -2,7 +2,6 @@
 
 _Updated 2026-10-15. `[~]` items are implemented but have a stated limitation or external dependency (see FEATURE_STATUS.md):_
 - _Global search / scanning: camera scan needs a BarcodeDetector-capable browser._
-- _Deployment: needs a Vercel project import + Neon + private Blob by the account owner._
 - _Security: per-account lockout only (add edge IP rate limiting); no MFA yet._
 - _Drag-and-drop board: verified via service tests and page render, limited manual browser testing._
 - _CSV import: customers, suppliers, material specs (no machines import)._
@@ -89,7 +88,7 @@ Verification evidence for each phase is in the git history and `tests/`.
 - [~] Data import tools (CSV customers/suppliers/machines/materials)
 - [x] Backup and restore scripts, restore test (Scenario J)
 - [~] Security review (headers, authz, uploads, rate limits)
-- [~] Vercel deployment (Neon, Blob, cron), demo seed
+- [x] Vercel deployment (Neon, Blob, cron), demo seed
 - [x] Documentation set (README, admin guide, user guide, deployment, backup, ISO map, feature status)
 
 ## Acceptance scenarios (automated)

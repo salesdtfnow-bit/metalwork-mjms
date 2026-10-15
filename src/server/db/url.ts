@@ -13,13 +13,21 @@ function isPg(v: string | undefined): v is string {
 }
 
 function find(names: string[]): string | undefined {
-  for (const n of names) if (isPg(process.env[n])) return process.env[n];
+  for (const n of names) if (isPg(process.env[n])) return strictTls(process.env[n]);
   // Prefixed variants, e.g. STORAGE_DATABASE_URL / MJMS_POSTGRES_URL.
   for (const n of names) {
     const key = Object.keys(process.env).find((k) => k.endsWith(`_${n}`) && isPg(process.env[k]));
-    if (key) return process.env[key];
+    if (key) return strictTls(process.env[key]!);
   }
   return undefined;
+}
+
+/**
+ * Neon issues URLs with sslmode=require. node-postgres currently treats that as verify-full but will
+ * weaken it to libpq semantics (no certificate check) in its next major version; pin full verification.
+ */
+function strictTls(url: string): string {
+  return url.replace(/([?&])sslmode=(prefer|require|verify-ca)(?=&|$)/, "$1sslmode=verify-full");
 }
 
 /** Pooled URL for the running app. */

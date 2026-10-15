@@ -32,12 +32,9 @@ export async function seedDemo(db: DB, opts: { password: string }) {
     .update(companySettings)
     .set({
       isDemo: true,
-      companyName: "Brackley Precision Engineering Ltd (DEMO)",
-      addressLines: "Unit 7, Shelley Road Industrial Estate\nBrackley\nNorthamptonshire\nNN13 7AB",
-      phone: "01280 000000",
-      email: "office@brackley-precision.test",
-      vatNumber: "GB 000 0000 00",
-      companyNumber: "00000000",
+      // Real company name; address, phone, VAT and company numbers are entered in Admin → Settings.
+      // "(DEMO)" stays so documents printed from demonstration data cannot be mistaken for real ones.
+      companyName: "Simmonds Engineering Ltd (DEMO)",
       defaultQuoteTerms:
         "Prices are ex-works and exclude VAT. Quotation valid for the period stated. Lead time confirmed on receipt of order and approved drawings. Material subject to availability at time of order. Our standard terms and conditions of sale apply.",
     })

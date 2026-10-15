@@ -31,6 +31,11 @@ describe("database URL resolution", () => {
     expect(directDatabaseUrl()).toBe("postgres://sd/db");
   });
 
+  it("pins full TLS verification on Neon-style URLs", () => {
+    only({ DATABASE_URL: "postgres://u:p@h/db?sslmode=require&channel_binding=require" });
+    expect(databaseUrl()).toBe("postgres://u:p@h/db?sslmode=verify-full&channel_binding=require");
+  });
+
   it("ignores non-postgres values and returns undefined when nothing is set", () => {
     only({ DATABASE_URL: "file:./local.db" });
     expect(databaseUrl()).toBeUndefined();

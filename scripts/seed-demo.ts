@@ -1,5 +1,5 @@
 /**
- * DEMONSTRATION data for a fictitious small/medium CNC workshop ("Brackley Precision Engineering").
+ * DEMONSTRATION data for Simmonds Engineering Ltd: fictitious customers, suppliers, people and jobs.
  *   npm run db:seed:demo
  * Refuses to run against a database that already contains non-demo data.
  * Every demo account uses the password in DEMO_PASSWORD (default below) — demo only.
