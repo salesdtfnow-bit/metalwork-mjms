@@ -8,7 +8,11 @@ Key:
 - 🔌 **Externally dependent.** Implemented, but needs an external account or configuration to work for real.
 - ⬜ **Not implemented.** Shown honestly in the UI where relevant.
 
-Automated test evidence: `npm test` runs 38+ tests, including acceptance scenarios A–J (`tests/scenarios/*`), against real PostgreSQL (PGlite) with the production migrations applied.
+**Evidence.**
+- **Automated tests.** `npm test` runs 38 tests, including acceptance scenarios A–J (`tests/scenarios/*`), against real PostgreSQL (PGlite) with the production migrations applied.
+- **Page render check.** `npm run smoke:prepare && npm run smoke:crawl` loaded every page and record view, for **each of the 11 demo roles**, against the production build. Result: 1,408 page loads with 0 errors. Restricted pages were refused per role, e.g. 99 for the operator and 0 for the administrator.
+- **Manual browser checks.** Login, the customer pages, the jobs list and route, the operator dashboard and workspace (stop production → NCR prompt → sign-off → next operation), the management dashboard, traceability, and the traveller and traceability PDFs.
+- **🟡 items.** "Partially verified" means the code and pages exist and render, but their interactive flows have had less hands-on clicking than the core path.
 
 ## Foundation
 | Feature | Status | Evidence / notes |
