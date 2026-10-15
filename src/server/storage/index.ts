@@ -89,6 +89,10 @@ export async function storeFile(
   let storageKey = key;
   if (backend === "memory") memory.set(key, input.bytes);
   else if (backend === "local") {
+    // Serverless filesystems are read-only/ephemeral: never store documents there.
+    if (process.env.VERCEL && process.env.MJMS_STORAGE !== "local") {
+      throw new AppError("File storage is not configured. Connect a private Vercel Blob store to this project, then redeploy.", "conflict");
+    }
     const { mkdir, writeFile } = await import("node:fs/promises");
     const full = path.join(/*turbopackIgnore: true*/ localRoot(), key);
     await mkdir(/*turbopackIgnore: true*/ path.dirname(full), { recursive: true });
