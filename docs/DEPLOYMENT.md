@@ -31,6 +31,11 @@ To run locally against a real PostgreSQL, set `DATABASE_URL` and `DATABASE_URL_U
 7. **Cron.** `vercel.json` schedules `/api/cron/daily` (05:00 UTC) and `/api/cron/boxhero-sync` (05:30 UTC). On the Hobby plan, crons run at most once a day. Outboxes are also processed immediately after each user action, so the daily cron is a safety net. On Pro, add `{ "path": "/api/cron/outbox", "schedule": "*/10 * * * *" }`.
 8. **Security.** Enable Vercel deployment protection for preview deployments. Add a firewall rate-limit rule on `/login` and `/api/*`.
 
+### Troubleshooting the first deploy
+- **Build fails with "No PostgreSQL URL found in the build environment".** The database is not connected to this project for the environment being built. Go to *Project → Storage*, open the Neon database, choose *Connect Project*, select this project, and tick **Production** (and Preview, if wanted). Then redeploy. The build log lists the database-like variable *names* it can see (never values).
+- **The app accepts `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or a prefixed form** (e.g. `STORAGE_DATABASE_URL` if a custom prefix was chosen when connecting), plus the matching unpooled variable for migrations. See `src/server/db/url.ts`.
+- **`/api/health` returns 503.** The running app cannot reach the database. Vercel → Logs shows `[health] database check failed: …`.
+
 ### Demo environment
 1. Set `DEMO_MODE=true`. This shows the demonstration banner, and on the next build `scripts/migrate.ts` seeds the fictitious workshop automatically, **only if the database has no customers**.
 2. Set `DEMO_PASSWORD` to a private value. Otherwise the default documented in the README is used, which anyone who reads it could sign in with.
