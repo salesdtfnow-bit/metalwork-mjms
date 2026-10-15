@@ -11,7 +11,7 @@ Key:
 **Evidence.**
 - **Automated tests.** `npm test` runs 38 tests, including acceptance scenarios A–J (`tests/scenarios/*`), against real PostgreSQL (PGlite) with the production migrations applied.
 - **Page render check.** `npm run smoke:prepare && npm run smoke:crawl` loaded every page and record view, for **each of the 11 demo roles**, against the production build. Result: 1,408 page loads with 0 errors. Restricted pages were refused per role, e.g. 99 for the operator and 0 for the administrator.
-- **Live deployment.** `metalwork-mjms.vercel.app`: build applied migrations to Neon and seeded the demo workshop; `/api/health` returns 200; no runtime errors.
+- **Live deployment.** `metalwork-mjms.vercel.app`: the demo database was reset and the first administrator created by the go-live build (`tests/smoke/provisioning.test.ts` covers the same path); `/api/health` returns 200; no runtime errors.
 - **Manual browser checks.** Login, the customer pages, the jobs list and route, the operator dashboard and workspace (stop production → NCR prompt → sign-off → next operation), the management dashboard, traceability, and the traveller and traceability PDFs.
 - **🟡 items.** "Partially verified" means the code and pages exist and render, but their interactive flows have had less hands-on clicking than the core path.
 
@@ -97,7 +97,7 @@ Key:
 | Email notifications | 🔌 | Opt-in per user; needs Resend |
 | CSV data import (customers, suppliers, material specs) | 🟡 | |
 | Backup and restore (verified, tamper-checked) | ✅ | Scenario J |
-| Production deployment | ✅ | Demo live on Vercel + Neon (migrations and demo seed run in the build; `/api/health` 200; unauthenticated pages redirect to sign-in). Behind Vercel Authentication. Blob uploads: confirm by uploading a file |
+| Production deployment | ✅ | Live on Vercel + Neon for Simmonds Engineering Ltd. Demo data removed and first administrator created by the guarded go-live build (2026-10-15); `/api/health` 200. Behind Vercel Authentication. Blob uploads: confirm by uploading a file |
 
 ## Known limitations
 1. Server uploads on Vercel are limited to about 4.5 MB per request. Very large CAD/STEP files need direct-to-Blob client uploads, which are not implemented. Locally the limit is 50 MB.
