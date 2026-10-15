@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * MJMS visual tokens — "drawing office meets shop floor".
+ * paper: drawing-sheet off-white · ink: graphite · steel: secondary text
+ * dykem: layout-fluid blue (primary accent) · signal colours for status only.
+ */
+@theme {
+  --color-paper: #f5f7f6;
+  --color-sheet: #ffffff;
+  --color-ink: #1b2430;
+  --color-ink-2: #2b3644;
+  --color-steel: #5b6b7a;
+  --color-steel-2: #8593a0;
+  --color-line: #d6dce1;
+  --color-line-2: #e8ecef;
+  --color-dykem: #2352a0;
+  --color-dykem-2: #1a3f7c;
+  --color-dykem-50: #eaf0fa;
+  --color-amber: #b9770e;
+  --color-amber-50: #fdf3e1;
+  --color-red: #b3261e;
+  --color-red-50: #fbeceb;
+  --color-green: #2b7348;
+  --color-green-50: #e7f3ec;
+  --color-violet: #6b4fa0;
+  --color-violet-50: #f1ecf8;
+
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-plate: var(--font-barlow), var(--font-plex), ui-sans-serif, sans-serif;
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    font-feature-settings: "tnum" 1, "cv11" 1;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-dykem);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-dykem-50);
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Reference nameplate: job / quote / NCR numbers. */
+  .plate {
+    font-family: var(--font-plate);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .field-input {
+    @apply w-full rounded-sm border border-line bg-sheet px-2.5 py-1.5 text-[14px] text-ink placeholder:text-steel-2 disabled:bg-line-2 disabled:text-steel;
+  }
+  .field-input:focus {
+    @apply border-dykem outline-none ring-2 ring-dykem/20;
+  }
+  .field-input[aria-invalid="true"] {
+    @apply border-red ring-2 ring-red/15;
+  }
+  .data-table {
+    @apply w-full border-collapse text-[13.5px];
+  }
+  .data-table th {
+    @apply border-b border-line bg-line-2/60 px-3 py-2 text-left text-[12px] font-semibold text-steel;
+  }
+  .data-table td {
+    @apply border-b border-line-2 px-3 py-2 align-top;
+  }
+  .data-table tbody tr:hover td {
+    @apply bg-dykem-50/40;
+  }
+  .link {
+    @apply text-dykem underline-offset-2 hover:underline;
+  }
 }

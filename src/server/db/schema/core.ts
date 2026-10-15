@@ -352,6 +352,14 @@ export const integrationEvents = pgTable(
   (t) => [index("integ_events_idx").on(t.integration, t.at)],
 );
 
+/** Form submission keys — protects every server action against duplicate submission. */
+export const submissionKeys = pgTable("submission_keys", {
+  key: text().primaryKey(),
+  userId: uuid().references(() => users.id),
+  action: text().notNull(),
+  createdAt: createdAt(),
+});
+
 export const integrationState = pgTable("integration_state", {
   key: text().primaryKey(), // boxhero | email
   lastSuccessAt: ts(),
