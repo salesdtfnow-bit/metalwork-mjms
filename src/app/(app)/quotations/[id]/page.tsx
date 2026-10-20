@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageCtx } from "@/server/auth/next";
 import { acceptanceSignMeaning, getQuotation } from "@/server/services/quotations";
+import { acceptanceUrl } from "@/server/services/quote-acceptance";
+import { requestBaseUrl } from "@/server/http";
 import { getSettings } from "@/server/services/settings";
 import { entityHistory } from "@/server/services/ui/sales";
 import { can, canAny } from "@/server/context";
@@ -21,6 +23,7 @@ import {
   followUpAction,
   markSentAction,
   recordAcceptanceAction,
+  approveAndSendAction,
   recordRejectionAction,
   regenerateLinkAction,
   removeQuoteLineAction,
@@ -35,7 +38,7 @@ type Data = Awaited<ReturnType<typeof getQuotation>>;
 type Rev = Data["revisions"][number];
 type Line = Rev["lines"][number];
 
-export default async function QuotationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; rev?: string }> }) {
+export default async function QuotationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; rev?: string; link?: string }> }) {
   const ctx = await requirePageCtx("quotations.view");
   const { id } = await params;
   const sp = await searchParams;
@@ -58,6 +61,7 @@ export default async function QuotationPage({ params, searchParams }: { params: 
   const [settings, history] = await Promise.all([getSettings(ctx.db), tab === "history" ? entityHistory(ctx, "quotation", id) : Promise.resolve([])]);
   const cur = r.currency;
   const base = `/quotations/${id}?rev=${r.revisionNo}`;
+  const newLink = sp.link && /^[A-Za-z0-9_-]{20,100}$/.test(sp.link) ? acceptanceUrl(await requestBaseUrl(), sp.link) : null;
 
   return (
     <>
@@ -135,6 +139,12 @@ export default async function QuotationPage({ params, searchParams }: { params: 
         </nav>
       )}
 
+      {newLink && (
+        <Notice tone="success" title="Sent — customer link ready">
+          <p>If you are sending the quotation from your own email, copy this link into it. The customer uses it to accept, ask for changes or decline. It is shown only now; you can replace it later if needed.</p>
+          <input readOnly value={newLink} aria-label="Customer acceptance link" className="field-input mt-2 font-mono text-[12.5px]" />
+        </Notice>
+      )}
       <NextStep ctx={{ manage, me, actor: ctx.actor, settings }} q={q} r={r} isLatest={isLatest} hasAccepted={hasAccepted} contactEmail={contact?.email ?? null} customerId={customer.id} />
 
       <Tabs
@@ -294,7 +304,9 @@ function Totals({ r, internal }: { r: Rev; internal: boolean }) {
     { label: "Tax", value: fmtMoney(r.taxAmount, r.currency), sub: r.taxTreatment === "standard" ? `${fmtPct(r.taxRate)} standard` : taxLabel(r.taxTreatment) },
     { label: "Total", value: fmtMoney(r.total, r.currency) },
   ];
-  if (internal) {
+  if (internal && d(r.totalCost).isZero() && r.lines.length > 0) {
+    cells.push({ label: "Cost", value: "Not costed", sub: "Prices entered directly", internal: true });
+  } else if (internal) {
     cells.push({ label: "Cost", value: fmtMoney(r.totalCost, r.currency), internal: true });
     cells.push({ label: "Margin", value: fmtMoney(margin.toFixed(2), r.currency), sub: pct !== null ? `${pct}% of subtotal` : undefined, internal: true, tone: pct !== null && Number(pct) < 10 ? "text-red" : undefined });
   }
@@ -508,28 +520,61 @@ function NextStep({
   const parts: ReactNode[] = [];
   const expired = !!r.validUntil && r.validUntil < todayISO();
 
+  const independent = ctx.settings.quoteApprovalMode === "independent";
+  const own = independent && r.preparedBy === ctx.me;
+  const canApproveSend = can(a, "quotations.review") && can(a, "quotations.send") && !own;
+  const approveSend = (
+    <ActionForm key="as" action={approveAndSendAction} submitLabel="Approve and send">
+      {hidden}
+      <p className="text-[13px] text-steel">
+        Check the lines and the preview PDF. Approving locks revision {r.revisionNo}, stores the issued PDF, starts the {r.validityDays}-day validity and creates the customer&apos;s online acceptance link.
+      </p>
+      <FormGrid cols={2}>
+        <TextField label="Send to" name="sentTo" required defaultValue={contactEmail} hint="Customer email, or how it was sent (e.g. handed to buyer)" />
+        <div className="pt-6">
+          <CheckboxField label="Email the PDF and acceptance link now" name="emailToCustomer" defaultChecked={!!contactEmail} />
+        </div>
+      </FormGrid>
+      <TextArea label="Message (for the email)" name="message" rows={2} />
+      <SignatureBlock meaning={`By signing I confirm I have reviewed ${q.ref} revision ${r.revisionNo} — pricing, capability, lead time and terms — and approve it for issue to the customer.`} />
+    </ActionForm>
+  );
+
   if (r.status === "draft") {
-    if (ctx.manage) {
+    if (r.lines.length === 0) {
       parts.push(
-        r.lines.length === 0 ? (
-          <p key="s" className="text-[13px] text-steel">
-            Add at least one costed line, then submit revision {r.revisionNo} for internal review.
+        <p key="s" className="text-[13px] text-steel">
+          {ctx.manage ? `Add at least one line to revision ${r.revisionNo}.` : "Draft — being prepared."}
+        </p>,
+      );
+    } else if (canApproveSend) {
+      parts.push(approveSend);
+    } else if (ctx.manage) {
+      parts.push(
+        <ActionForm key="s" action={submitForReviewAction} submitLabel="Submit for approval">
+          {hidden}
+          <p className="text-[13px] text-steel">
+            {own ? "Independent approval is on, so someone else must approve your quotation." : "Someone with permission to approve quotations will check and send it."}
           </p>
-        ) : (
-          <ActionForm key="s" action={submitForReviewAction} submitLabel="Submit for review">
-            {hidden}
-            <p className="text-[13px] text-steel">
-              Revision {r.revisionNo} is a draft with {r.lines.length} {r.lines.length === 1 ? "line" : "lines"}. Check the preview PDF, then submit it for internal review.
-            </p>
-          </ActionForm>
-        ),
+        </ActionForm>,
       );
     } else parts.push(<p key="s" className="text-[13px] text-steel">Draft — being prepared.</p>);
   }
 
   if (r.status === "internal_review" && !r.reviewedAt) {
-    const own = ctx.settings.requireIndependentApproval && r.preparedBy === ctx.me;
-    if (can(a, "quotations.review") && !own) {
+    if (canApproveSend) {
+      parts.push(approveSend);
+      parts.push(
+        <Disclosure key="ret" label="Return for correction instead">
+          <ActionForm action={reviewQuotationAction} submitLabel="Return to draft" className="w-[min(560px,80vw)]">
+            {hidden}
+            <input type="hidden" name="decision" value="rejected" />
+            <TextArea label="What needs correcting?" name="comment" rows={2} required />
+            <SignatureBlock meaning={`By signing I return ${q.ref} revision ${r.revisionNo} for correction.`} />
+          </ActionForm>
+        </Disclosure>,
+      );
+    } else if (can(a, "quotations.review") && !own) {
       parts.push(
         <ActionForm key="rv" action={reviewQuotationAction} submitLabel="Sign review decision">
           {hidden}
@@ -592,7 +637,7 @@ function NextStep({
                 <FileField label="Acceptance evidence" name="evidence" hint="The customer’s email (.eml/.pdf) or PO" />
                 <TextField label="Reference" name="reference" hint="e.g. PO number or email date — required if no file" />
                 <TextArea label="Customer comments" name="feedback" rows={2} />
-                <p className="text-[12px] text-steel">A second person must verify the acceptance before a job can be created.</p>
+                <p className="text-[12px] text-steel">{ctx.settings.quoteAcceptanceMode === "single_step" && can(a, "quotations.verify_acceptance") ? "The quotation becomes Accepted as soon as you record it." : "A second person must verify the acceptance before a job can be created."}</p>
               </ActionForm>
             )}
           </Disclosure>,
@@ -717,7 +762,7 @@ function NextStep({
   if (r.status === "expired") parts.push(<p key="x" className="text-[13px] text-steel">Expired on {fmtDate(r.validUntil)} without a recorded acceptance.</p>);
   if (r.status === "superseded") parts.push(<p key="x" className="text-[13px] text-steel">Superseded by a later revision — do not use.</p>);
 
-  const canRevise = ctx.manage && isLatest && !hasAccepted && r.status !== "draft";
+  const canRevise = ctx.manage && isLatest && !hasAccepted && !["draft", "internal_review"].includes(r.status);
   if (!parts.length && !canRevise) return null;
 
   return (

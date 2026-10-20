@@ -178,8 +178,9 @@ export async function seedDemoOperations(demo: DemoCtx, refs: { customers: Recor
     await submitForReview(sales, revision.id);
     await reviewQuotation(manager, revision.id, { decision: "approved", password: PW() });
     await markQuotationSent(sales, revision.id, { sentTo: "buyer@customer.test" });
-    await recordCustomerResponse(sales, revision.id, { decision: "accepted", reference: `Customer email accepting ${quotation.ref}`, evidence: pdf("acceptance.pdf", "acceptance email") });
-    await verifyAcceptance(manager, revision.id, { password: PW() });
+    const res = await recordCustomerResponse(sales, revision.id, { decision: "accepted", reference: `Customer email accepting ${quotation.ref}`, evidence: pdf("acceptance.pdf", "acceptance email") });
+    // Under the one-step acceptance setting it is already accepted; otherwise a second person verifies.
+    if (!res?.accepted) await verifyAcceptance(manager, revision.id, { password: PW() });
     const po = await registerCustomerOrder(sales, { customerId: opts.customerId, customerPoNumber: `PO-${opts.pn}-${Math.floor(Math.random() * 9000 + 1000)}`, quotationRevisionId: revision.id, requiredDate: opts.required, poDate: iso(days(-30)) }, pdf("customer-po.pdf", "customer purchase order"));
     await verifyCustomerOrder(manager, po.id, { password: PW() });
     const job = await convertOrderToJob(sales, po.id, { title: opts.title, ownerId: u("planner@demo.test").userId, requiredDate: opts.required });

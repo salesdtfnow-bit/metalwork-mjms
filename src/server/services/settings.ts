@@ -37,6 +37,8 @@ export const settingsInput = z.object({
   retentionYears: z.number().int().min(1).max(100),
   allowSelfInspection: z.boolean(),
   requireIndependentApproval: z.boolean(),
+  quoteApprovalMode: z.enum(["single_step", "independent"]),
+  quoteAcceptanceMode: z.enum(["single_step", "verified"]),
   boxheroMode: z.enum(["simulated", "api", "manual"]),
 });
 

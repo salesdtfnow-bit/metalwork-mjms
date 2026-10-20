@@ -6,6 +6,7 @@ import { action } from "@/server/action";
 import { f } from "@/server/forms";
 import { invalid } from "@/server/errors";
 import {
+  approveAndSend,
   createQuotation,
   createRevision,
   markQuotationSent,
@@ -25,6 +26,8 @@ import { trimQty } from "@/lib/decimal";
 
 const TAX = ["standard", "zero", "exempt", "reverse_charge"] as const;
 const path = (i: { quotationId: string }) => [`/quotations/${i.quotationId}`, "/quotations"];
+/** Back to the quotation showing the new customer link once (the token itself is never stored). */
+const showLink = (quotationId: string, url: string | null) => redirect(`/quotations/${quotationId}${url ? `?link=${encodeURIComponent(url.split("/q/")[1])}` : ""}`);
 
 export const createQuotationAction = action(
   "quotation.create",
@@ -211,7 +214,25 @@ export const markSentAction = action(
   z.object({ quotationId: f.uuid(), revisionId: f.uuid(), sentTo: f.str("Record who the quotation was sent to."), emailToCustomer: f.bool(), message: f.optStr() }),
   async (ctx, i) => {
     const res = await markQuotationSent(ctx, i.revisionId, { sentTo: i.sentTo, emailToCustomer: i.emailToCustomer, message: i.message, linkBaseUrl: await requestBaseUrl() });
-    return `Marked as sent. The issued PDF is stored; valid until ${res.validUntil}.${i.emailToCustomer ? " The email, with the online acceptance link, has been queued." : ""} Customer link (copy it if you send the quote yourself): ${res.acceptanceUrl}`;
+    showLink(i.quotationId, res.acceptanceUrl);
+  },
+  { revalidate: path },
+);
+
+export const approveAndSendAction = action(
+  "quotation.approve_send",
+  z.object({
+    quotationId: f.uuid(),
+    revisionId: f.uuid(),
+    sentTo: f.str("Enter who it is going to (email address, or e.g. 'handed to buyer')."),
+    emailToCustomer: f.bool(),
+    message: f.optStr(),
+    comment: f.optStr(),
+    password: f.str("Enter your password to sign."),
+  }),
+  async (ctx, i) => {
+    const res = await approveAndSend(ctx, i.revisionId, { sentTo: i.sentTo, emailToCustomer: i.emailToCustomer, message: i.message, comment: i.comment, password: i.password, linkBaseUrl: await requestBaseUrl() });
+    showLink(i.quotationId, res.acceptanceUrl);
   },
   { revalidate: path },
 );
@@ -221,7 +242,7 @@ export const regenerateLinkAction = action(
   z.object({ quotationId: f.uuid(), revisionId: f.uuid() }),
   async (ctx, i) => {
     const token = await regenerateAcceptanceLink(ctx, i.revisionId);
-    return `New customer link (earlier links no longer work): ${acceptanceUrl(await requestBaseUrl(), token)}`;
+    showLink(i.quotationId, acceptanceUrl(await requestBaseUrl(), token));
   },
   { revalidate: path },
 );
@@ -240,8 +261,8 @@ export const recordAcceptanceAction = action(
   "quotation.acceptance",
   z.object({ quotationId: f.uuid(), revisionId: f.uuid(), reference: f.optStr(), feedback: f.optStr(), evidence: f.file() }),
   async (ctx, i) => {
-    await recordCustomerResponse(ctx, i.revisionId, { decision: "accepted", reference: i.reference, feedback: i.feedback, evidence: i.evidence ?? null });
-    return "Acceptance recorded. A second person must now verify it.";
+    const res = await recordCustomerResponse(ctx, i.revisionId, { decision: "accepted", reference: i.reference, feedback: i.feedback, evidence: i.evidence ?? null });
+    return res?.accepted ? "Accepted. You can now register the customer PO." : "Acceptance recorded. A second person must now verify it.";
   },
   { revalidate: path },
 );

@@ -138,6 +138,8 @@ export const updateSettingsAction = action(
     retentionYears: f.int({ min: 1, max: 100 }),
     allowSelfInspection: f.bool(),
     requireIndependentApproval: f.bool(),
+    quoteApprovalMode: f.enumOf(["single_step", "independent"] as const),
+    quoteAcceptanceMode: f.enumOf(["single_step", "verified"] as const),
     boxheroMode: f.enumOf(["simulated", "api", "manual"] as const),
   }),
   async (ctx, i) => {

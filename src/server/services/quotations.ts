@@ -13,7 +13,7 @@ import {
   users,
 } from "../db/schema";
 import { audit } from "../audit";
-import { mutate, requirePermission, type Ctx } from "../context";
+import { can, mutate, requirePermission, type Ctx } from "../context";
 import { forbidden, invalid, notFound } from "../errors";
 import { nextRef, REF } from "../refs";
 import { costLine, quoteTotals, type TaxTreatment } from "@/lib/costing";
@@ -138,7 +138,6 @@ export type QuoteLineInput = z.input<typeof quoteLineInput>;
 export async function saveQuoteLine(ctx: Ctx, revisionId: string, raw: QuoteLineInput, lineId?: string) {
   requirePermission(ctx, "quotations.manage");
   const l = quoteLineInput.parse(raw);
-  if (l.priceOverridePerUnit && !l.priceOverrideReason?.trim()) throw invalid("Give a reason for overriding the calculated price.", { field: "priceOverrideReason" });
   return mutate(ctx, async (tx) => {
     const { rev, q } = await loadRevision(tx, revisionId);
     assertEditable(rev);
@@ -147,6 +146,11 @@ export async function saveQuoteLine(ctx: Ctx, revisionId: string, raw: QuoteLine
       breakdown = costLine({ ...l, operations: l.operations }, rev.defaultMarginPct);
     } catch (e) {
       throw invalid((e as Error).message);
+    }
+    // A price typed straight in (no cost build-up) is simply the price; a reason is needed only
+    // when it replaces a price calculated from costs.
+    if (l.priceOverridePerUnit && Number(breakdown.totalCost) > 0 && !l.priceOverrideReason?.trim()) {
+      throw invalid("Give a reason for replacing the calculated price.", { field: "priceOverrideReason" });
     }
     const values = {
       ...l,
@@ -248,14 +252,14 @@ export async function submitForReview(ctx: Ctx, revisionId: string) {
   });
 }
 
-/** Internal approval (signed). Approver must differ from the preparer when independence is required. */
+/** Internal approval (signed). Approver must differ from the preparer when quotation approval is independent. */
 export async function reviewQuotation(ctx: Ctx, revisionId: string, input: { decision: "approved" | "rejected"; comment?: string | null; password: string }) {
   requirePermission(ctx, "quotations.review");
   const settings = await getSettings(ctx.db);
   return mutate(ctx, async (tx) => {
     const { rev, q } = await loadRevision(tx, revisionId);
     if (rev.status !== "internal_review") throw invalid("This revision is not awaiting internal review.");
-    if (settings.requireIndependentApproval && rev.preparedBy === ctx.actor.userId) throw forbidden("Independent approval is required: you prepared this quotation.");
+    if (settings.quoteApprovalMode === "independent" && rev.preparedBy === ctx.actor.userId) throw forbidden("Independent approval is required: you prepared this quotation.");
     if (input.decision === "rejected" && !input.comment?.trim()) throw invalid("Explain why the quotation is being returned.", { field: "comment" });
     const approval = await signApproval(tx, {
       kind: "quotation.review",
@@ -290,10 +294,20 @@ export async function markQuotationSent(
 ) {
   requirePermission(ctx, "quotations.send");
   if (!input.sentTo?.trim()) throw invalid("Record who the quotation was sent to.", { field: "sentTo" });
-  const { renderQuotationPdf } = await import("../pdf/quotation");
   return mutate(ctx, async (tx) => {
     const { rev, q } = await loadRevision(tx, revisionId);
     if (rev.status !== "internal_review" || !rev.reviewedAt) throw invalid("The quotation must be approved in internal review before it is sent.");
+    return issueRevisionTx(tx, rev, q, input);
+  });
+}
+
+type SendInput = { sentTo: string; emailToCustomer?: boolean; message?: string | null; linkBaseUrl?: string | null };
+
+/** Locks the reviewed revision, stamps validity, stores the issued PDF, issues the customer link and queues the email. */
+async function issueRevisionTx(tx: Ctx, rev: typeof quotationRevisions.$inferSelect, q: typeof quotations.$inferSelect, input: SendInput) {
+  const ctx = tx;
+  const { renderQuotationPdf } = await import("../pdf/quotation");
+  {
     const today = todayISO();
     const validUntil = addDaysISO(today, rev.validityDays);
     await tx.db.update(quotationRevisions).set({ status: "sent", isLocked: true, sentAt: new Date(), sentBy: ctx.actor.userId, sentTo: input.sentTo.trim(), validUntil }).where(eq(quotationRevisions.id, rev.id));
@@ -326,6 +340,41 @@ Review and respond online: ${link}` : ""}`,
     }
     await audit(tx, { action: "quotation.sent", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, after: { sentTo: input.sentTo, validUntil, pdfFileId: file.id, sha256: file.sha256, emailed: !!input.emailToCustomer } });
     return { fileId: file.id, validUntil, acceptanceUrl: link };
+  }
+}
+
+/**
+ * One-step issue: the signed contract review and sending happen together. Allowed from draft or
+ * awaiting-review. Under independent approval the signer must not be the preparer.
+ */
+export async function approveAndSend(ctx: Ctx, revisionId: string, input: SendInput & { password: string; comment?: string | null }) {
+  requirePermission(ctx, "quotations.review");
+  requirePermission(ctx, "quotations.send");
+  if (!input.sentTo?.trim()) throw invalid("Record who the quotation is going to.", { field: "sentTo" });
+  const settings = await getSettings(ctx.db);
+  return mutate(ctx, async (tx) => {
+    const { rev, q } = await loadRevision(tx, revisionId);
+    if (!["draft", "internal_review"].includes(rev.status) || rev.reviewedAt) throw invalid("Only a draft or a revision awaiting review can be approved and sent.");
+    if (settings.quoteApprovalMode === "independent" && rev.preparedBy === ctx.actor.userId) throw forbidden("Independent approval is required: you prepared this quotation.");
+    const lines = await tx.db.select({ id: quotationLines.id }).from(quotationLines).where(eq(quotationLines.revisionId, revisionId));
+    if (!lines.length) throw invalid("Add at least one line first.");
+    const approval = await signApproval(tx, {
+      kind: "quotation.review",
+      entityType: "quotation_revision",
+      entityId: rev.id,
+      decision: "approved",
+      meaning: `I have reviewed ${q.ref} revision ${rev.revisionNo} (pricing, capability, lead time and terms) and approve it for issue to the customer.`,
+      comment: input.comment,
+      password: input.password,
+    });
+    const now = new Date();
+    await tx.db
+      .update(quotationRevisions)
+      .set({ status: "internal_review", submittedForReviewAt: rev.submittedForReviewAt ?? now, reviewedBy: ctx.actor.userId, reviewedAt: now, reviewApprovalId: approval.id })
+      .where(eq(quotationRevisions.id, rev.id));
+    await audit(tx, { action: "quotation.review_approved", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, approvalId: approval.id, reason: input.comment ?? "Approved and sent in one step" });
+    const [fresh] = await tx.db.select().from(quotationRevisions).where(eq(quotationRevisions.id, rev.id));
+    return issueRevisionTx(tx, fresh, q, input);
   });
 }
 
@@ -374,6 +423,18 @@ export async function recordCustomerResponse(
       .set({ acceptanceEvidenceFileId: evidenceId, acceptanceReference: input.reference ?? null, acceptanceRecordedBy: ctx.actor.userId, acceptanceRecordedAt: new Date(), customerFeedback: input.feedback ?? rev.customerFeedback, respondedAt: new Date(), status: "awaiting_response" })
       .where(eq(quotationRevisions.id, rev.id));
     await audit(tx, { action: "quotation.acceptance_recorded", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, after: { evidenceFileId: evidenceId, reference: input.reference } });
+    const settings = await getSettings(tx.db);
+    if (settings.quoteAcceptanceMode === "single_step" && can(ctx.actor, "quotations.verify_acceptance")) {
+      await tx.db
+        .update(quotationRevisions)
+        .set({ status: "accepted", acceptanceChannel: "staff", acceptanceVerifiedBy: ctx.actor.userId, acceptanceVerifiedAt: new Date() })
+        .where(eq(quotationRevisions.id, rev.id));
+      await tx.db.update(quotations).set({ status: "accepted" }).where(eq(quotations.id, q.id));
+      if (q.enquiryId) await advanceEnquiryStatus(tx, q.enquiryId, "won");
+      await audit(tx, { action: "quotation.accepted", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, reason: "Accepted in one step: recorded with evidence (company setting)", after: { channel: "staff" } });
+      return { accepted: true };
+    }
+    return { accepted: false };
   });
 }
 

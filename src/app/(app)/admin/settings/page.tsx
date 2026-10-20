@@ -53,10 +53,37 @@ export default async function SettingsPage() {
               </Notice>
             </div>
             <div>
-              <CheckboxField label="Require independent approval" name="requireIndependentApproval" defaultChecked={s.requireIndependentApproval} hint="The approver of a document or CNC program revision must not be its author." />
+              <CheckboxField label="Require independent approval" name="requireIndependentApproval" defaultChecked={s.requireIndependentApproval} hint="The approver of a document or CNC program revision must not be its author. (Quotations have their own setting below.)" />
               <Notice tone="warning">Turning this off allows people to approve their own documents and programs — segregation of duties expected by ISO 9001 / AS9100 auditors is lost.</Notice>
             </div>
           </div>
+        </Section>
+
+        <Section title="Quotations">
+          <FormGrid cols={2}>
+            <SelectField
+              label="Approval before sending"
+              name="quoteApprovalMode"
+              required
+              defaultValue={s.quoteApprovalMode}
+              options={[
+                { value: "single_step", label: "One step — the preparer approves and sends (signed)" },
+                { value: "independent", label: "Independent — a second person must approve" },
+              ]}
+              hint="Either way, a signed review is recorded before the quotation goes out (ISO 9001 contract review)."
+            />
+            <SelectField
+              label="Acceptance by email or phone"
+              name="quoteAcceptanceMode"
+              required
+              defaultValue={s.quoteAcceptanceMode}
+              options={[
+                { value: "single_step", label: "One step — accepted when recorded with evidence" },
+                { value: "verified", label: "Verified — a second person checks the evidence" },
+              ]}
+              hint="Online acceptances by the customer are always countersigned once."
+            />
+          </FormGrid>
         </Section>
 
         <Section title="BoxHero inventory integration">

@@ -126,6 +126,10 @@ export const companySettings = pgTable("company_settings", {
   allowSelfInspection: boolean().notNull().default(false),
   /** Require approver ≠ author for documents and programs (segregation of duties). */
   requireIndependentApproval: boolean().notNull().default(true),
+  /** Quotations: single_step = the preparer reviews and sends in one signed step; independent = a second person approves. */
+  quoteApprovalMode: text().notNull().default("single_step"),
+  /** Customer acceptance recorded by staff: single_step = accepted when recorded with evidence; verified = a second person verifies. */
+  quoteAcceptanceMode: text().notNull().default("single_step"),
   boxheroMode: text().notNull().default("simulated"), // simulated | api | manual
   isDemo: boolean().notNull().default(false),
   updatedAt: updatedAt(),

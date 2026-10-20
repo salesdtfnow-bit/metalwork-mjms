@@ -29,6 +29,13 @@
       "when": 1792487593351,
       "tag": "0003_customer_quote_acceptance",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792489523783,
+      "tag": "0004_quick_quotes_direct_orders",
+      "breakpoints": true
     }
   ]
 }

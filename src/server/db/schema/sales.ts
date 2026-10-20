@@ -310,3 +310,24 @@ export const customerOrders = pgTable(
   },
   (t) => [uniqueIndex("co_ref_uq").on(t.ref), uniqueIndex("co_cust_po_uq").on(t.customerId, t.customerPoNumber)],
 );
+
+/** Lines of a PO received without a quotation (repeat or call-off orders): what the customer ordered. */
+export const customerOrderLines = pgTable(
+  "customer_order_lines",
+  {
+    id: pk(),
+    orderId: uuid()
+      .notNull()
+      .references(() => customerOrders.id),
+    lineNo: integer().notNull(),
+    partNumber: text().notNull(),
+    description: text().notNull(),
+    drawingRevision: text(),
+    materialSpec: text(),
+    quantity: qty().notNull(),
+    unitPrice: rate(),
+    lineTotal: money(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("col_order_line_uq").on(t.orderId, t.lineNo)],
+);

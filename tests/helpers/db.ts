@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { createPgliteDb, type DB } from "@/server/db/client";
 import { ensureBaseData, getSystemUserId } from "@/server/bootstrap";
-import { employees, roles, userRoles, users } from "@/server/db/schema";
+import { companySettings, employees, roles, userRoles, users } from "@/server/db/schema";
 import { hashPassword } from "@/server/auth/password";
 import { loadActor } from "@/server/auth/session";
 import type { Actor, Ctx } from "@/server/context";
@@ -10,9 +10,16 @@ import { ALL_PERMISSIONS } from "@/server/auth/permissions";
 export const TEST_PASSWORD = "Workshop-Test-Pass-2026";
 let pwHash: string | undefined;
 
-export async function setupDb(): Promise<DB> {
+/**
+ * Test database with the strict quotation controls (independent approval, second-person acceptance
+ * check) that most scenarios exercise. Pass { quoteMode: "default" } for the shipped one-step defaults.
+ */
+export async function setupDb(opts: { quoteMode?: "strict" | "default" } = {}): Promise<DB> {
   const db = await createPgliteDb(undefined, { migrate: true });
   await ensureBaseData(db);
+  if ((opts.quoteMode ?? "strict") === "strict") {
+    await db.update(companySettings).set({ quoteApprovalMode: "independent", quoteAcceptanceMode: "verified" }).where(eq(companySettings.id, 1));
+  }
   return db;
 }
 

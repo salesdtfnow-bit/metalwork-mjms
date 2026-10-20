@@ -56,6 +56,7 @@ export function QuoteLineForm({
   const l = line?.values ?? {};
   const ops = line?.operations ?? [];
   const lineId = line?.id;
+  const hasCosting = ops.length > 0 || ["batchSize", "materialCostPerUnit", "marginPct", ...OTHER_COSTS.map((c) => c.name)].some((k) => l[k] && Number(l[k]) !== 0);
 
   const recalc = useCallback(() => {
     const form = wrap.current?.closest("form");
@@ -107,14 +108,27 @@ export function QuoteLineForm({
       <div ref={wrap} onInput={recalc} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
         <div className="space-y-4">
           <fieldset>
-            <legend className="mb-2 text-[12.5px] font-semibold text-ink">Part</legend>
+            <legend className="mb-2 text-[12.5px] font-semibold text-ink">Part and price</legend>
             <FormGrid cols={4}>
               <TextField label="Part number" name="partNumber" required defaultValue={l.partNumber} />
               <TextField label="Description" name="description" required defaultValue={l.description} className="sm:col-span-2 lg:col-span-3" />
+              <NumberField label="Quantity" name="quantity" required defaultValue={show(l.quantity)} />
+              <NumberField label="Unit price" name="priceOverridePerUnit" unit={currency} defaultValue={show(l.priceOverridePerUnit)} hint="Or leave blank and fill in the cost build-up" />
               <TextField label="Drawing number" name="drawingNumber" defaultValue={l.drawingNumber} />
               <TextField label="Drawing revision" name="drawingRevision" defaultValue={l.drawingRevision} />
               <TextField label="Material" name="materialSpec" defaultValue={l.materialSpec} placeholder="e.g. 6082-T6 Ø50 bar" className="sm:col-span-2" />
-              <NumberField label="Quantity" name="quantity" required defaultValue={show(l.quantity)} />
+              <TextArea label="Line notes" name="notes" rows={1} defaultValue={l.notes} hint="Internal; not printed on the PDF." className="sm:col-span-2" />
+            </FormGrid>
+          </fieldset>
+
+          <details open={hasCosting} className="rounded-md border border-line bg-sheet px-3 py-2 [&[open]>summary]:mb-3">
+            <summary className="cursor-pointer text-[13px] font-semibold text-ink">
+              Cost build-up <span className="font-normal text-steel">— optional: material, machining time and other costs, priced at a margin</span>
+            </summary>
+            <div className="space-y-4">
+          <fieldset>
+            <legend className="mb-2 text-[12.5px] font-semibold text-ink">Material and batches</legend>
+            <FormGrid cols={4}>
               <NumberField label="Batch size" name="batchSize" defaultValue={show(l.batchSize)} hint="Blank = one batch" />
               <NumberField label="Material cost per unit" name="materialCostPerUnit" unit={currency} defaultValue={show(l.materialCostPerUnit)} />
               <NumberField label="Material wastage" name="materialWastagePct" unit="%" defaultValue={show(l.materialWastagePct)} />
@@ -169,22 +183,26 @@ export function QuoteLineForm({
           </fieldset>
 
           <fieldset>
-            <legend className="mb-2 text-[12.5px] font-semibold text-ink">Pricing</legend>
+            <legend className="mb-2 text-[12.5px] font-semibold text-ink">Margin</legend>
             <FormGrid cols={3}>
               <NumberField label="Margin override" name="marginPct" unit="%" defaultValue={show(l.marginPct)} hint={`Blank = revision default (${trimQty(defaultMarginPct)}%)`} />
-              <NumberField label="Price override per unit" name="priceOverridePerUnit" unit={currency} defaultValue={show(l.priceOverridePerUnit)} hint="Replaces the calculated price" />
-              <TextField label="Override reason" name="priceOverrideReason" defaultValue={l.priceOverrideReason} hint="Required with a price override" />
+              <TextField label="Reason for a different unit price" name="priceOverrideReason" defaultValue={l.priceOverrideReason} hint="Only when the unit price above replaces the calculated one" className="sm:col-span-2" />
             </FormGrid>
-            <div className="mt-3">
-              <TextArea label="Line notes" name="notes" rows={2} defaultValue={l.notes} hint="Kept with the line; not printed on the quotation PDF." />
-            </div>
           </fieldset>
+            </div>
+          </details>
         </div>
 
         <aside aria-live="polite" className="self-start rounded-md border border-ink/30 bg-paper p-3 lg:sticky lg:top-4">
-          <p className="text-[12.5px] font-semibold text-ink">Calculated price</p>
+          <p className="text-[12.5px] font-semibold text-ink">Price</p>
           {!preview ? null : "error" in preview ? (
             <p className="mt-2 text-[12.5px] text-steel">{preview.error}</p>
+          ) : Number(preview.totalCost) === 0 ? (
+            <dl className="mt-2 space-y-1 text-[12.5px]">
+              <Row label="Unit price" value={fmtMoney(preview.unitPrice, currency)} strong />
+              <Row label="Line total" value={fmtMoney(preview.lineTotal, currency)} strong />
+              <p className="pt-1 text-[11.5px] text-steel">No cost build-up entered, so no margin is shown.</p>
+            </dl>
           ) : (
             <dl className="mt-2 space-y-1 text-[12.5px]">
               <Row label="Batches" value={String(preview.batches)} />

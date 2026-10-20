@@ -14,7 +14,7 @@ import { createdAt, pk, qty, rate, ts, updatedAt } from "./_helpers";
 import { users } from "./core";
 import { documentRevisions, partRevisions, parts } from "./documents";
 import { addresses, customers } from "./parties";
-import { customerOrders, quotationLines, quotationRevisions } from "./sales";
+import { customerOrderLines, customerOrders, quotationLines, quotationRevisions } from "./sales";
 import { competencies, downtimeReasons, employees, machineGroups, machines } from "./resources";
 import { cncProgramRevisions } from "./programs";
 import { materialLots } from "./materials";
@@ -103,6 +103,8 @@ export const jobLines = pgTable(
     /** Drawing revision pinned at order; changes go through a controlled review. */
     drawingRevisionId: uuid().references(() => documentRevisions.id),
     quotationLineId: uuid().references(() => quotationLines.id),
+    /** Set instead of quotationLineId when the job came from a PO without a quotation. */
+    customerOrderLineId: uuid().references(() => customerOrderLines.id),
     quantity: qty().notNull(),
     unitPrice: rate(),
     materialSpec: text(),
