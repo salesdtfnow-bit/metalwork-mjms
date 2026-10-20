@@ -31,6 +31,7 @@ export function OrderForm({
   draft,
   poFileId,
   poFileName,
+  aiExtractionId,
 }: {
   customer: { id: string; currency: string };
   quotations: { value: string; label: string }[];
@@ -42,6 +43,7 @@ export function OrderForm({
   /** A PO PDF already uploaded (e.g. read by the assistant) — used instead of a new upload. */
   poFileId?: string | null;
   poFileName?: string | null;
+  aiExtractionId?: string | null;
 }) {
   const [revisionId, setRevisionId] = useState(draft?.lines?.length ? "" : (preselectRevisionId ?? ""));
   const [lines, setLines] = useState<OrderLineDraft[]>(draft?.lines?.length ? draft.lines : [{ ...blank }, { ...blank }]);
@@ -54,6 +56,7 @@ export function OrderForm({
     <ActionForm action={registerOrderAction} hideSubmit className="space-y-5">
       <input type="hidden" name="customerId" value={customer.id} />
       {poFileId && <input type="hidden" name="poFileId" value={poFileId} />}
+      {aiExtractionId && <input type="hidden" name="aiExtractionId" value={aiExtractionId} />}
 
       <fieldset>
         <legend className="mb-2 text-[13px] font-semibold text-ink">Purchase order</legend>

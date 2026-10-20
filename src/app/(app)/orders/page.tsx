@@ -21,9 +21,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         description="Customer purchase orders: registered on receipt, checked against the accepted quotation (contract review), then converted to jobs."
         actions={
           can(ctx.actor, "orders.manage") && (
-            <LinkButton href="/orders/new" variant="primary">
-              Register PO
-            </LinkButton>
+            <div className="flex flex-wrap gap-2">
+              <LinkButton href="/orders/import">Create from PO file</LinkButton>
+              <LinkButton href="/orders/new" variant="primary">
+                Register PO
+              </LinkButton>
+            </div>
           )
         }
       />

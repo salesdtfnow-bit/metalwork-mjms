@@ -8,22 +8,35 @@ import { fmtMoney } from "@/lib/format";
 import { QUOTE_STATUS, statusDef } from "@/lib/status";
 import { Notice, PageHeader, Panel } from "@/components/ui";
 import { OrderForm } from "./OrderForm";
+import { getPoDraft } from "@/server/services/po-import";
 
 export const metadata = { title: "Register customer PO" };
 
-export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ customerId?: string; revisionId?: string }> }) {
+export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ customerId?: string; revisionId?: string; draft?: string }> }) {
   const ctx = await requirePageCtx("orders.manage");
   const sp = await searchParams;
   const customers = await customerOptions(ctx);
   const customer = customers.find((c) => c.id === sp.customerId);
+  const draft = sp.draft && /^[0-9a-f-]{36}$/.test(sp.draft) ? await getPoDraft(ctx, sp.draft).catch(() => null) : null;
 
   if (!customer) {
     return (
       <>
         <PageHeader title="Register customer PO" description="Choose the customer who sent the purchase order." />
         {sp.customerId && <Notice tone="warning">That customer was not found or is inactive.</Notice>}
+        {draft && (
+          <Notice tone="info" title="PO read — now choose the customer">
+            {draft.customerName ? <>The PO appears to be from <strong>{draft.customerName}</strong>, which doesn&apos;t match an existing customer. </> : "The customer couldn't be identified from the PO. "}
+            Choose them below, or{" "}
+            <Link href="/customers/new" className="link">
+              add the customer
+            </Link>{" "}
+            first and come back to this page.
+          </Notice>
+        )}
         <Panel className="max-w-xl p-4">
           <form className="space-y-3" method="get">
+            {draft && <input type="hidden" name="draft" value={draft.extractionId} />}
             <label className="block text-[12.5px] font-medium text-ink-2" htmlFor="customerId">
               Customer
             </label>
@@ -63,8 +76,25 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           </>
         }
       />
+      {draft && (
+        <Notice tone={draft.warnings.length ? "warning" : "info"} title={draft.used ? "This PO reading has already been used for an order" : "Filled in from the PO by the assistant — check everything before saving"}>
+          <p>Compare each part number, quantity, price and date with the PO{draft.file ? <> (<a className="link" href={`/api/files/${draft.file.id}`} target="_blank" rel="noopener">open the PO</a>)</> : null}. The assistant can misread scans and unusual layouts.</p>
+          {draft.warnings.length > 0 && (
+            <ul className="mt-2 list-disc pl-5">
+              {draft.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          )}
+          {draft.currency && draft.currency.toUpperCase() !== customer.currency && <p className="mt-2">The PO is in {draft.currency}; this customer is set up in {customer.currency}.</p>}
+        </Notice>
+      )}
       <Panel className="max-w-5xl p-4">
         <OrderForm
+          draft={draft?.draft}
+          poFileId={draft?.file?.id}
+          poFileName={draft?.file?.name}
+          aiExtractionId={draft?.extractionId}
           customer={{ id: customer.id, currency: customer.currency }}
           quotations={revs.map(({ rev, q }) => ({
             value: rev.id,

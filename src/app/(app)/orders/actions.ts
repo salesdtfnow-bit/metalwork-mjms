@@ -5,6 +5,7 @@ import { z } from "zod";
 import { action } from "@/server/action";
 import { f } from "@/server/forms";
 import { invalid } from "@/server/errors";
+import { linkExtractionToOrder, readPurchaseOrder } from "@/server/services/po-import";
 import { cancelCustomerOrder, convertOrderToJob, linkQuotationToOrder, registerAndCreateJob, registerCustomerOrder, verifyCustomerOrder } from "@/server/services/orders";
 
 const TRACE = ["job", "batch", "piece"] as const;
@@ -28,8 +29,9 @@ export const registerOrderAction = action(
     priority: f.optInt(),
     discrepancies: f.optStr(),
     password: f.optStr(),
+    aiExtractionId: f.optUuid(),
   }),
-  async (ctx, { poFile, poFileId, createJob, jobTitle, priority, discrepancies, password, ...i }, fd) => {
+  async (ctx, { poFile, poFileId, createJob, jobTitle, priority, discrepancies, password, aiExtractionId, ...i }, fd) => {
     const lines = readLines(fd);
     if (i.quotationRevisionId) lines.length = 0;
     else if (!lines.length) throw invalid("Enter at least one ordered line, or choose the quotation.");
@@ -38,10 +40,12 @@ export const registerOrderAction = action(
     if (createJob) {
       if (!password) throw invalid("Enter your password to sign the contract review.", { field: "password" });
       if (!jobTitle) throw invalid("Give the job a title.", { field: "jobTitle" });
-      const { job } = await registerAndCreateJob(ctx, order, file, { password, discrepancies }, { title: jobTitle, priority: priority ?? 3 }, poFileId);
+      const { job, order: created } = await registerAndCreateJob(ctx, order, file, { password, discrepancies }, { title: jobTitle, priority: priority ?? 3 }, poFileId);
+      if (aiExtractionId) await linkExtractionToOrder(ctx, aiExtractionId, created.id);
       redirect(`/jobs/${job.id}`);
     }
     const o = await registerCustomerOrder(ctx, order, file, poFileId);
+    if (aiExtractionId) await linkExtractionToOrder(ctx, aiExtractionId, o.id);
     redirect(`/orders/${o.id}`);
   },
   { revalidate: ["/orders", "/jobs"] },
@@ -67,6 +71,16 @@ function readLines(fd: FormData) {
   }
   return out;
 }
+
+export const readPoAction = action(
+  "order.read_pdf",
+  z.object({ poFile: f.file() }),
+  async (ctx, { poFile }) => {
+    if (!poFile) throw invalid("Choose the customer's PO file.", { field: "poFile" });
+    const r = await readPurchaseOrder(ctx, poFile);
+    redirect(`/orders/new?draft=${r.extractionId}${r.customerId ? `&customerId=${r.customerId}` : ""}`);
+  },
+);
 
 export const verifyOrderAction = action(
   "order.verify",

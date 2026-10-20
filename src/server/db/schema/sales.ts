@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, pgTable, text, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, pgTable, text, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createdAt, money, pk, qty, rate, ts, updatedAt } from "./_helpers";
 import { files, users } from "./core";
 import { documentRevisions, parts } from "./documents";
@@ -330,4 +330,28 @@ export const customerOrderLines = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("col_order_line_uq").on(t.orderId, t.lineNo)],
+);
+
+/**
+ * A document read by the AI assistant (a customer PO, or drawings for a quote). Keeps what was
+ * proposed, by which model, and what it became once a person checked and confirmed it.
+ */
+export const aiExtractions = pgTable(
+  "ai_extractions",
+  {
+    id: pk(),
+    /** purchase_order | drawing_quote */
+    kind: text().notNull(),
+    sourceFileIds: uuid().array().notNull(),
+    model: text().notNull(),
+    /** The structured result exactly as returned (after schema validation). */
+    result: jsonb().notNull(),
+    inputTokens: integer(),
+    outputTokens: integer(),
+    createdBy: uuid().references(() => users.id),
+    createdAt: createdAt(),
+    customerOrderId: uuid().references(() => customerOrders.id),
+    quotationId: uuid().references(() => quotations.id),
+  },
+  (t) => [index("aix_created_idx").on(t.createdAt)],
 );

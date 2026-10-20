@@ -22,6 +22,7 @@
     "smoke:crawl": "tsx scripts/smoke-crawl.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@electric-sql/pglite": "^0.5.10",
     "@vercel/blob": "^2.8.2",
     "@vercel/functions": "^3.10.1",

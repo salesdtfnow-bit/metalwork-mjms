@@ -36,6 +36,13 @@
       "when": 1792489523783,
       "tag": "0004_quick_quotes_direct_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792490701448,
+      "tag": "0005_ai_extractions",
+      "breakpoints": true
     }
   ]
 }
