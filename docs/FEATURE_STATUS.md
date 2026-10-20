@@ -38,6 +38,10 @@ Key:
 | Microsoft 365 / Graph mailbox import | ⬜ | Documented adapter path in INTEGRATIONS.md |
 | Quotation costing engine (decimal-safe) | ✅ | `tests/unit/costing.test.ts` |
 | Quotation revisions, review (signed, independent), send (lock + PDF), follow-up, acceptance recorded then verified by a second person | ✅ | Commercial tests |
+| Quick quotations: one-step signed approve-and-send (independent approval optional), quick-price lines with optional cost build-up, one-step acceptance (setting) | ✅ | `tests/scenarios/quick-quote.test.ts`; checked in browser |
+| Customer POs without a quotation; register + contract review + job in one step | ✅ | `tests/scenarios/direct-order.test.ts`; form checked in browser |
+| Create order from a PO file (and its drawings) with Claude — pre-filled form, person confirms | 🔌 | `tests/scenarios/po-import.test.ts` (assistant simulated). Instructions tuned on a real customer PO and drawings. **Not yet run against the live Claude API** — needs `ANTHROPIC_API_KEY` |
+| Draft quotation from enquiry drawings with Claude (unpriced draft; cannot be sent until priced) | 🔌 | `tests/scenarios/quote-assist.test.ts` (assistant simulated). Needs `ANTHROPIC_API_KEY` |
 | Customer online acceptance via secure link (accept / ask for changes / decline), staff countersignature, signed order acceptance PDF | ✅ | `tests/scenarios/customer-acceptance.test.ts`; checked in browser (customer page, countersign, PDF). Needs the site reachable by customers (see DEPLOYMENT.md) |
 | Quotation PDF | ✅ | PDF bytes verified in tests |
 | Emailing quotations to customers | 🔌 | Queued in the outbox; sent when Resend is configured |

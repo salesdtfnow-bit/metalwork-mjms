@@ -29,6 +29,7 @@ function fakeReader(result: PoExtraction) {
 
 const reading = (over: Partial<PoExtraction> = {}): PoExtraction => ({
   customerName: "Test Customer Ltd",
+  orderedBy: "A. Buyer",
   matchedCustomerCode: null,
   poNumber: "7781",
   poDate: "2026-10-19",
@@ -37,8 +38,8 @@ const reading = (over: Partial<PoExtraction> = {}): PoExtraction => ({
   deliveryAddress: "Goods In, Unit 4",
   terms: "30 days EOM",
   lines: [
-    { partNumber: "SP-10", description: "Spacer", drawingRevision: "B", materialSpec: "303 stainless", quantity: 200, unitPrice: 1.1 },
-    { partNumber: "BR-22", description: "Bracket", drawingRevision: null, materialSpec: null, quantity: 50, unitPrice: null },
+    { partNumber: "SP-10_B", description: "Spacer", drawingRevision: "B", materialSpec: "303 stainless", quantity: 200, unitPrice: 1.1, requiredDate: "2026-11-20" },
+    { partNumber: "BR-22", description: "Bracket", drawingRevision: null, materialSpec: null, quantity: 50, unitPrice: null, requiredDate: "2026-11-13" },
   ],
   warnings: ["Carriage £25 not included in lines"],
   ...over,
@@ -64,8 +65,9 @@ describe("create order from a PO file", () => {
     const d = await getPoDraft(t.sales.ctx, r.extractionId);
     expect(d.draft.customerPoNumber).toBe("7781");
     expect(d.draft.poDate).toBe("2026-10-19");
-    expect(d.draft.requiredDate).toBeNull();
-    expect(d.draft.lines[0]).toMatchObject({ partNumber: "SP-10", quantity: "200", unitPrice: "1.1", drawingRevision: "B" });
+    expect(d.draft.requiredDate).toBe("2026-11-13"); // order date not ISO → earliest line date, never a guess
+    expect(d.draft.notes).toContain("Ordered by: A. Buyer");
+    expect(d.draft.lines[0]).toMatchObject({ partNumber: "SP-10_B", quantity: "200", unitPrice: "1.1", drawingRevision: "B" });
     expect(d.draft.lines[1].unitPrice).toBeNull();
     expect(d.warnings).toEqual(["Carriage £25 not included in lines"]);
 
@@ -74,6 +76,22 @@ describe("create order from a PO file", () => {
     await linkExtractionToOrder(t.sales.ctx, r.extractionId, o.id);
     expect(o.poFileId).toBe(d.file!.id);
     expect((await getPoDraft(t.sales.ctx, r.extractionId)).used).toBe(true);
+  });
+
+  it("reads a PO together with its drawings, telling the assistant which is which", async () => {
+    const cust = await customer(t.sales.ctx);
+    const drawing = (n: string) => new File([Buffer.from("%PDF-1.4 drawing")], n, { type: "application/pdf" });
+    const { reader, calls } = fakeReader(reading({ matchedCustomerCode: cust.code }));
+    const r = await readPurchaseOrder(t.sales.ctx, [poPdf(), drawing("SP-10 rev B.pdf"), drawing("BR-22.pdf")], { reader });
+    expect(calls[0].docs).toBe(3);
+    expect(calls[0].instructions).toContain("SP-10 rev B.pdf, BR-22.pdf");
+    expect(calls[0].instructions).toMatch(/usage per assembly, NOT order quantities/);
+    const d = await getPoDraft(t.sales.ctx, r.extractionId);
+    expect(d.file?.name).toBe("PO-7781.pdf");
+    expect(d.drawings.map((x) => x.name)).toEqual(["SP-10 rev B.pdf", "BR-22.pdf"]);
+    // Anyone who can view orders can open the files the assistant read.
+    const { authorizeFileAccess } = await import("@/server/services/files");
+    await expect(authorizeFileAccess(t.manager.ctx, d.drawings[0].id)).resolves.toBeTruthy();
   });
 
   it("falls back to matching the customer by name, and leaves it unset when unknown", async () => {
@@ -86,7 +104,7 @@ describe("create order from a PO file", () => {
 
   it("refuses non-document files, needs order permission, and explains when the assistant is not set up", async () => {
     const txt = new File(["hello"], "notes.txt", { type: "text/plain" });
-    await expect(readPurchaseOrder(t.sales.ctx, txt, { reader: fakeReader(reading()).reader })).rejects.toThrow(/PDF or an image/);
+    await expect(readPurchaseOrder(t.sales.ctx, txt, { reader: fakeReader(reading()).reader })).rejects.toThrow(/upload PDFs or images/);
     await expect(readPurchaseOrder(t.opA.ctx, poPdf(), { reader: fakeReader(reading()).reader })).rejects.toThrow();
     const saved = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;

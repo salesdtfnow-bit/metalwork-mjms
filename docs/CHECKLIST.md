@@ -32,6 +32,9 @@ Verification evidence for each phase is in the git history and `tests/`.
 - [x] Quotation PDF
 - [x] Customer acceptance recording and verification (evidence required)
 - [x] Customer online acceptance (secure link), countersignature and signed order acceptance PDF
+- [x] Quick quotations (approve and send in one step, quick-price lines, one-step acceptance)
+- [x] Customer POs without a quotation; one-step register, contract review and job
+- [~] Document assistant (Claude): PO file → order, enquiry drawings → draft quote (tested with a simulated assistant; live run pending API key)
 - [x] Customer PO registration and verification
 - [x] Convert accepted quote + PO into job (job lines, pinned drawing revisions)
 

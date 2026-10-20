@@ -24,6 +24,7 @@ To run locally against a real PostgreSQL, set `DATABASE_URL` and `DATABASE_URL_U
    - `APP_BASE_URL=https://<your-domain>`. This is used in the customer acceptance links in quotation emails. Without it, the address of the browser that sent the quotation is used.
    - `CRON_SECRET=<32+ random chars>`
    - Email: `RESEND_API_KEY`, `EMAIL_FROM`, `RESEND_WEBHOOK_SECRET` (inbound).
+   - Document assistant (optional): `ANTHROPIC_API_KEY`, from console.anthropic.com. This turns on *Create from PO file* and *Draft quote from drawings*. Optionally set `MJMS_AI_MODEL` (default `claude-opus-5-5`). It is billed per use by Anthropic: a typical PO reading costs a few pence.
    - BoxHero: `BOXHERO_MODE=api`, `BOXHERO_API_TOKEN`, `BOXHERO_WEBHOOK_SECRET`.
    - `NEXT_PUBLIC_COMPANY_TZ=Europe/London` (if not UK, also set the company timezone in Admin → Settings).
 5. **Deploy.** The first build runs the migrations and seeds the base data (roles, defaults).

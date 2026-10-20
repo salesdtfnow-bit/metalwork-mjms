@@ -38,7 +38,7 @@ type Data = Awaited<ReturnType<typeof getQuotation>>;
 type Rev = Data["revisions"][number];
 type Line = Rev["lines"][number];
 
-export default async function QuotationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; rev?: string; link?: string }> }) {
+export default async function QuotationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; rev?: string; link?: string; drafted?: string }> }) {
   const ctx = await requirePageCtx("quotations.view");
   const { id } = await params;
   const sp = await searchParams;
@@ -139,6 +139,12 @@ export default async function QuotationPage({ params, searchParams }: { params: 
         </nav>
       )}
 
+      {sp.drafted && r.status === "draft" && (
+        <Notice tone="info" title="Drafted by the assistant from the enquiry">
+          <p>Check every line against the customer&apos;s drawings, then add the unit prices (or fill in the cost build-up — the suggested operations are already listed there). The quotation can&apos;t be approved or sent until every line is priced.</p>
+          {r.internalNotes && <p className="mt-2 whitespace-pre-line">{r.internalNotes}</p>}
+        </Notice>
+      )}
       {newLink && (
         <Notice tone="success" title="Sent — customer link ready">
           <p>If you are sending the quotation from your own email, copy this link into it. The customer uses it to accept, ask for changes or decline. It is shown only now; you can replace it later if needed.</p>

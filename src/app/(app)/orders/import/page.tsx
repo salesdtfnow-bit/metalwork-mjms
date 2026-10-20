@@ -31,7 +31,8 @@ export default async function ImportPoPage() {
       ) : (
         <Panel className="max-w-2xl p-4">
           <ActionForm action={readPoAction} submitLabel="Read PO" submitSize="lg">
-            <FileField label="Customer PO" name="poFile" required accept=".pdf,image/png,image/jpeg,image/webp" hint="PDF, or a photo/scan (PNG, JPEG). Up to 4 MB. The file is kept unaltered as the customer original." />
+            <FileField label="Customer PO" name="poFile" required accept=".pdf,image/png,image/jpeg,image/webp" hint="PDF, or a photo/scan (PNG, JPEG). Kept unaltered as the customer original." />
+            <FileField label="Drawings sent with it (optional)" name="drawings" multiple accept=".pdf,image/png,image/jpeg,image/webp" hint="The assistant takes the material and revision from them and flags mismatches with the PO. All files together up to 4 MB." />
             <p className="text-[12.5px] text-steel">
               Reading usually takes 10–40 seconds. The assistant can misread scans or unusual layouts, so check every part number, quantity, price and date on the next screen.
             </p>

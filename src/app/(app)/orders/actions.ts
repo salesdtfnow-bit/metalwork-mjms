@@ -74,10 +74,12 @@ function readLines(fd: FormData) {
 
 export const readPoAction = action(
   "order.read_pdf",
-  z.object({ poFile: f.file() }),
-  async (ctx, { poFile }) => {
-    if (!poFile) throw invalid("Choose the customer's PO file.", { field: "poFile" });
-    const r = await readPurchaseOrder(ctx, poFile);
+  z.object({}),
+  async (ctx, _i, fd) => {
+    const po = fd.get("poFile");
+    const drawings = fd.getAll("drawings").filter((v): v is File => v instanceof File && v.size > 0);
+    if (!(po instanceof File) || po.size === 0) throw invalid("Choose the customer's PO file.", { field: "poFile" });
+    const r = await readPurchaseOrder(ctx, [po, ...drawings]);
     redirect(`/orders/new?draft=${r.extractionId}${r.customerId ? `&customerId=${r.customerId}` : ""}`);
   },
 );

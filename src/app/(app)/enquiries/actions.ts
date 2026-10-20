@@ -6,6 +6,17 @@ import { action } from "@/server/action";
 import { f } from "@/server/forms";
 import { invalid } from "@/server/errors";
 import { fromLocalInput } from "./_components/time";
+import { draftQuoteFromEnquiry } from "@/server/services/quote-assist";
+
+export const draftQuoteAction = action(
+  "enquiry.ai_draft_quote",
+  z.object({ enquiryId: f.uuid() }),
+  async (ctx, { enquiryId }) => {
+    const r = await draftQuoteFromEnquiry(ctx, enquiryId);
+    redirect(`/quotations/${r.quotationId}?drafted=1`);
+  },
+  { revalidate: (i) => [`/enquiries/${i.enquiryId}`, "/quotations"] },
+);
 
 function receivedAtOf(v: string | null): Date | undefined {
   if (!v) return undefined;

@@ -14,13 +14,17 @@ import { AuditList } from "@/components/AuditList";
 import { ATTACHMENT_KIND_OPTIONS, DRAWING_KINDS, ENQUIRY_NEXT, OPEN_ENQUIRY, REASON_REQUIRED, RECEIVED_VIA_OPTIONS, attachmentKindLabel, receivedViaLabel } from "../_components/labels";
 import { toLocalInput } from "../_components/time";
 import { trimQty } from "@/lib/decimal";
-import { addAttachmentsAction, addEnquiryLineAction, registerDrawingAction, removeEnquiryLineAction, setEnquiryStatusAction, updateEnquiryAction, updateEnquiryLineAction } from "../actions";
+import { aiConfigured } from "@/server/ai/claude";
+import { draftQuoteAction, addAttachmentsAction, addEnquiryLineAction, registerDrawingAction, removeEnquiryLineAction, setEnquiryStatusAction, updateEnquiryAction, updateEnquiryLineAction } from "../actions";
 
 function fileSize(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 102.4) / 10} KB`;
   return `${Math.round(n / 104857.6) / 10} MB`;
 }
+
+/** Drafting a quote with the assistant can take up to a minute or two for several drawings. */
+export const maxDuration = 120;
 
 export default async function EnquiryPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; upload?: string }> }) {
   const ctx = await requirePageCtx("enquiries.view");
@@ -81,9 +85,16 @@ export default async function EnquiryPage({ params, searchParams }: { params: Pr
         ]}
         actions={
           canQuote && (
-            <LinkButton href={`/quotations/new?enquiryId=${e.id}`} variant="primary" size="sm">
-              Create quotation
-            </LinkButton>
+            <div className="flex flex-wrap items-start gap-2">
+              {aiConfigured() && (
+                <ActionForm action={draftQuoteAction} submitLabel="Draft quote from drawings" submitVariant="secondary" submitSize="sm" inline>
+                  <input type="hidden" name="enquiryId" value={e.id} />
+                </ActionForm>
+              )}
+              <LinkButton href={`/quotations/new?enquiryId=${e.id}`} variant="primary" size="sm">
+                Create quotation
+              </LinkButton>
+            </div>
           )
         }
       />

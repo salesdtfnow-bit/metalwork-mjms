@@ -84,23 +84,25 @@ New revisions never overwrite earlier ones. Released revisions keep their file a
 1. **Enquiries.**
    - Create one, or use **Email inbox**: import an `.eml` file or receive emails automatically (if configured), then create or link an enquiry.
    - Customer files are kept as originals. Drawings can be registered as controlled documents.
+   - **Draft quote from drawings** (if the document assistant is set up): the assistant reads the enquiry email and the attached PDF or image drawings. It creates a **draft** quotation with one line per part: part and drawing number, revision, material, quantity, finish, critical features (tolerances, threads) and suggested operations. Questions for the customer go in the internal notes. **It does not price anything.** The quotation cannot be approved or sent until every line has a price.
 2. **Quotation.**
-   - Add lines with full costing: material + wastage, programming, setup per batch, operations (setup and cycle times × rate), labour, tooling, consumables, subcontract, finishing, inspection, certification, packaging, delivery, and margin.
-   - A live preview shows unit cost and price.
-   - **Submit for review**. A manager approves it (signed). Then **mark as sent**; this locks the revision and stores the PDF.
-   - Changes need a **new revision**, and old revisions are kept.
-3. **Customer response.** Either way, the acceptance must be confirmed by a second step before a job can be created.
+   - **Quick lines:** part number, description, quantity and **unit price**. That's all a line needs.
+   - **Cost build-up (optional):** material + wastage, programming, setup per batch, operations (setup and cycle times × rate), labour, tooling, subcontract, finishing, inspection, packaging, delivery, and margin, with a live preview of cost and price.
+   - **Approve and send** in one step: check the lines and preview PDF, enter who it goes to, and sign with your password. This is the recorded contract review; it locks the revision, stores the PDF and creates the customer's online acceptance link. If your company turns on *Independent approval* (Admin → Settings → Quotations), someone other than the preparer must approve it.
+   - Changes after sending need a **new revision**, and old revisions are kept.
+3. **Customer response.**
    - **Online (mutual acceptance).** Sending a quotation creates a secure **customer link**, included in the quotation email. The success message shows it too, so you can paste it into your own email. On that page the customer reviews the exact revision and either:
      - **accepts**, giving their name, position, email and PO number, attaching their PO if they like, and confirming they are authorised;
      - **asks for changes**, which notifies you and adds their comment to the quotation, with the link staying open; or
      - **declines**.
 
      An online acceptance arrives as **Accepted online** on the quotation. Someone with permission to verify acceptances then **countersigns** it with their password. That confirms the order and emails the customer a **signed order acceptance PDF** showing both signatures. Sending a new revision, or using **Replace customer link**, stops the old link working. Links stop accepting responses when the quotation expires.
-   - **By email or phone.** Record the acceptance with evidence (the email, the PO) or a reference. A **different person verifies** it before it counts as accepted.
+   - **By email or phone.** Record the acceptance with evidence (the email, the PO) or a reference. With the default setting it is accepted straight away; if your company requires it, a **different person verifies** it first.
 4. **Customer orders.**
-   - Register the PO (attach the document).
-   - **Verify** it against the accepted quotation (contract review, signed).
-   - **Create job.** The job number is permanent.
+   - **With a quotation:** register the PO against the accepted quotation.
+   - **Without a quotation** (repeat or call-off orders): choose *No quotation* and type the lines from the PO (part number, description, drawing revision, material, quantity, unit price).
+   - **Create from PO file:** upload the customer's PO, plus any drawings sent with it. The assistant fills in the order: customer, PO number, dates, lines, and material and revision from the drawings, with warnings for anything to check. **Check every value against the PO before saving.** The PO file is kept as the original.
+   - **Create the job now:** tick it on the PO form to sign the contract review and create the job in the same step, so the work can be planned straight away. Otherwise, **sign the contract review** on the order page and then **Create job**. The job number is permanent.
 
 ## Purchasing
 1. **Requisitions** come from authorised jobs. Raise **purchase orders** only to approved suppliers. Another person **approves** the PO, then you **mark it sent**.

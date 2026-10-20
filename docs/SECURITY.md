@@ -52,6 +52,13 @@ Last reviewed: 2026-10-15. This reflects the code at this commit.
 ## Integrations
 - **Secrets** come only from environment variables: BoxHero token, Resend key, webhook secrets, cron secret. `.env*` is git-ignored.
 - **Resend webhooks** are Svix-verified.
+- **Document assistant (Claude).**
+  - **What is sent:** only the documents a user chooses to have read (a PO and its drawings, or an enquiry's email and drawings), sent to the Anthropic API.
+  - **Untrusted content:** document text is treated as data, the model is told to ignore instructions inside it, and no tools are exposed to it.
+  - **What it can do:** results are schema-validated and only pre-fill a draft or form that a person checks and confirms. Quotations drafted by the assistant have no prices and cannot be sent until every line is priced.
+  - **Records:** each reading (model, result, token use, source files, and the order or quotation it became) is stored and audited.
+  - **Fallback:** a safety decline is retried on Anthropic's recommended fallback model; otherwise the user enters the details manually.
+  - **Before go-live:** review whether customer drawings may be sent to a third-party processor under your customers' confidentiality terms.
 - **BoxHero webhooks** are unsigned upstream, so they use a secret path, and the payload is re-fetched through the API before being trusted.
 - **Cron routes** require `Authorization: Bearer $CRON_SECRET`, compared in constant time.
 

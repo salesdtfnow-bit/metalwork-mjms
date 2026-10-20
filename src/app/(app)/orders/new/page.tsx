@@ -79,6 +79,20 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
       {draft && (
         <Notice tone={draft.warnings.length ? "warning" : "info"} title={draft.used ? "This PO reading has already been used for an order" : "Filled in from the PO by the assistant — check everything before saving"}>
           <p>Compare each part number, quantity, price and date with the PO{draft.file ? <> (<a className="link" href={`/api/files/${draft.file.id}`} target="_blank" rel="noopener">open the PO</a>)</> : null}. The assistant can misread scans and unusual layouts.</p>
+          {draft.drawings.length > 0 && (
+            <p className="mt-1">
+              Drawings read:{" "}
+              {draft.drawings.map((d, i) => (
+                <span key={d.id}>
+                  {i > 0 && ", "}
+                  <a className="link" href={`/api/files/${d.id}`} target="_blank" rel="noopener">
+                    {d.name}
+                  </a>
+                </span>
+              ))}
+              . Register them under Documents so the approved revision is pinned to the job.
+            </p>
+          )}
           {draft.warnings.length > 0 && (
             <ul className="mt-2 list-disc pl-5">
               {draft.warnings.map((w, i) => (

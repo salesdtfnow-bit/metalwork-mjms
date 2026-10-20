@@ -1,5 +1,6 @@
-import { eq, or } from "drizzle-orm";
+import { and, arrayContains, eq, or } from "drizzle-orm";
 import {
+  aiExtractions,
   calibrationRecords,
   cncProgramRevisions,
   cncPrograms,
@@ -94,6 +95,8 @@ export async function authorizeFileAccess(ctx: Ctx, fileId: string): Promise<{ f
     [db.select({ id: trainingRecords.id }).from(trainingRecords).where(eq(trainingRecords.fileId, fileId)), "employees.view", "training"],
     [db.select({ id: employeeCompetencies.id }).from(employeeCompetencies).where(eq(employeeCompetencies.evidenceFileId, fileId)), "employees.view", "competency"],
     [db.select({ id: partyFiles.id }).from(partyFiles).where(eq(partyFiles.fileId, fileId)), "customers.view", "party_file"],
+    [db.select({ id: aiExtractions.id }).from(aiExtractions).where(and(eq(aiExtractions.kind, "purchase_order"), arrayContains(aiExtractions.sourceFileIds, [fileId]))), "orders.view", "ai_reading"],
+    [db.select({ id: aiExtractions.id }).from(aiExtractions).where(and(eq(aiExtractions.kind, "drawing_quote"), arrayContains(aiExtractions.sourceFileIds, [fileId]))), "quotations.view", "ai_reading"],
     [db.select({ id: partyFiles.id }).from(partyFiles).where(eq(partyFiles.fileId, fileId)), "suppliers.view", "party_file"],
   ];
   for (const [q, permission, label] of simple) {

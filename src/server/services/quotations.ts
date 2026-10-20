@@ -245,11 +245,19 @@ export async function submitForReview(ctx: Ctx, revisionId: string) {
     if (rev.status !== "draft") throw invalid("Only draft revisions can be submitted for review.");
     const lines = await tx.db.select({ id: quotationLines.id }).from(quotationLines).where(eq(quotationLines.revisionId, revisionId));
     if (!lines.length) throw invalid("Add at least one line before submitting.");
+    await assertPriced(tx, revisionId);
     await tx.db.update(quotationRevisions).set({ status: "internal_review", submittedForReviewAt: new Date() }).where(eq(quotationRevisions.id, revisionId));
     await tx.db.update(quotations).set({ status: "internal_review" }).where(eq(quotations.id, q.id));
     await audit(tx, { action: "quotation.submit_review", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}` });
     await notify(tx, { type: "quotation.review", title: `Quotation ${q.ref} rev ${rev.revisionNo} awaiting approval`, body: q.title, link: `/quotations/${q.id}`, permission: "quotations.review", excludeActor: true, dedupeKey: `qrev:${rev.id}` });
   });
+}
+
+/** A quotation cannot go to review or to the customer with a line still at zero (e.g. drafted by the assistant). */
+async function assertPriced(tx: Ctx, revisionId: string) {
+  const lines = await tx.db.select({ lineNo: quotationLines.lineNo, partNumber: quotationLines.partNumber, unitPrice: quotationLines.unitPrice }).from(quotationLines).where(eq(quotationLines.revisionId, revisionId));
+  const unpriced = lines.filter((l) => !(Number(l.unitPrice) > 0));
+  if (unpriced.length) throw invalid(`Price every line first — no price on ${unpriced.map((l) => `line ${l.lineNo} (${l.partNumber})`).join(", ")}.`);
 }
 
 /** Internal approval (signed). Approver must differ from the preparer when quotation approval is independent. */
@@ -358,6 +366,7 @@ export async function approveAndSend(ctx: Ctx, revisionId: string, input: SendIn
     if (settings.quoteApprovalMode === "independent" && rev.preparedBy === ctx.actor.userId) throw forbidden("Independent approval is required: you prepared this quotation.");
     const lines = await tx.db.select({ id: quotationLines.id }).from(quotationLines).where(eq(quotationLines.revisionId, revisionId));
     if (!lines.length) throw invalid("Add at least one line first.");
+    await assertPriced(tx, revisionId);
     const approval = await signApproval(tx, {
       kind: "quotation.review",
       entityType: "quotation_revision",
