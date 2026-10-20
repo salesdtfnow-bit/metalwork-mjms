@@ -89,9 +89,14 @@ New revisions never overwrite earlier ones. Released revisions keep their file a
    - A live preview shows unit cost and price.
    - **Submit for review**. A manager approves it (signed). Then **mark as sent**; this locks the revision and stores the PDF.
    - Changes need a **new revision**, and old revisions are kept.
-3. **Customer response.**
-   - Record the acceptance with evidence (the email, the PO) or a reference.
-   - A **different person verifies** it before it counts as accepted.
+3. **Customer response.** Either way, the acceptance must be confirmed by a second step before a job can be created.
+   - **Online (mutual acceptance).** Sending a quotation creates a secure **customer link**, included in the quotation email. The success message shows it too, so you can paste it into your own email. On that page the customer reviews the exact revision and either:
+     - **accepts**, giving their name, position, email and PO number, attaching their PO if they like, and confirming they are authorised;
+     - **asks for changes**, which notifies you and adds their comment to the quotation, with the link staying open; or
+     - **declines**.
+
+     An online acceptance arrives as **Accepted online** on the quotation. Someone with permission to verify acceptances then **countersigns** it with their password. That confirms the order and emails the customer a **signed order acceptance PDF** showing both signatures. Sending a new revision, or using **Replace customer link**, stops the old link working. Links stop accepting responses when the quotation expires.
+   - **By email or phone.** Record the acceptance with evidence (the email, the PO) or a reference. A **different person verifies** it before it counts as accepted.
 4. **Customer orders.**
    - Register the PO (attach the document).
    - **Verify** it against the accepted quotation (contract review, signed).

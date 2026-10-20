@@ -4,6 +4,7 @@ import { addresses, contacts, customers, enquiries, quotationLines, quotationRev
 import { getSettings } from "../services/settings";
 import { formatAddress } from "../services/parties";
 import { fmtDate, fmtMoney, fmtQty } from "@/lib/format";
+import { trimQty } from "@/lib/decimal";
 import { companyFromSettings, Doc } from "./layout";
 
 export async function renderQuotationPdf(ctx: Ctx, revisionId: string): Promise<Buffer> {
@@ -57,7 +58,7 @@ export async function renderQuotationPdf(ctx: Ctx, revisionId: string): Promise<
     [0.04, 0.34, 0.14, 0.14, 0.08, 0.13, 0.13],
     { align: ["l", "l", "l", "l", "r", "r", "r"] },
   );
-  const taxLabel = row.rev.taxTreatment === "standard" ? `VAT @ ${row.rev.taxRate}%` : row.rev.taxTreatment === "reverse_charge" ? "VAT (reverse charge)" : row.rev.taxTreatment === "zero" ? "VAT (zero-rated)" : "VAT (exempt)";
+  const taxLabel = row.rev.taxTreatment === "standard" ? `VAT @ ${trimQty(row.rev.taxRate)}%` : row.rev.taxTreatment === "reverse_charge" ? "VAT (reverse charge)" : row.rev.taxTreatment === "zero" ? "VAT (zero-rated)" : "VAT (exempt)";
   doc.totals([
     ["Subtotal", fmtMoney(row.rev.subtotal, cur)],
     [taxLabel, fmtMoney(row.rev.taxAmount, cur)],

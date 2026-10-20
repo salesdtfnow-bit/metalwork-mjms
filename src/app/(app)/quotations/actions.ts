@@ -19,6 +19,8 @@ import {
   verifyAcceptance,
 } from "@/server/services/quotations";
 import { getEnquiry } from "@/server/services/enquiries";
+import { acceptanceUrl, regenerateAcceptanceLink } from "@/server/services/quote-acceptance";
+import { requestBaseUrl } from "@/server/http";
 import { trimQty } from "@/lib/decimal";
 
 const TAX = ["standard", "zero", "exempt", "reverse_charge"] as const;
@@ -208,8 +210,18 @@ export const markSentAction = action(
   "quotation.sent",
   z.object({ quotationId: f.uuid(), revisionId: f.uuid(), sentTo: f.str("Record who the quotation was sent to."), emailToCustomer: f.bool(), message: f.optStr() }),
   async (ctx, i) => {
-    const res = await markQuotationSent(ctx, i.revisionId, { sentTo: i.sentTo, emailToCustomer: i.emailToCustomer, message: i.message });
-    return `Marked as sent. The issued PDF is stored; valid until ${res.validUntil}.${i.emailToCustomer ? " The email has been queued." : ""}`;
+    const res = await markQuotationSent(ctx, i.revisionId, { sentTo: i.sentTo, emailToCustomer: i.emailToCustomer, message: i.message, linkBaseUrl: await requestBaseUrl() });
+    return `Marked as sent. The issued PDF is stored; valid until ${res.validUntil}.${i.emailToCustomer ? " The email, with the online acceptance link, has been queued." : ""} Customer link (copy it if you send the quote yourself): ${res.acceptanceUrl}`;
+  },
+  { revalidate: path },
+);
+
+export const regenerateLinkAction = action(
+  "quotation.link",
+  z.object({ quotationId: f.uuid(), revisionId: f.uuid() }),
+  async (ctx, i) => {
+    const token = await regenerateAcceptanceLink(ctx, i.revisionId);
+    return `New customer link (earlier links no longer work): ${acceptanceUrl(await requestBaseUrl(), token)}`;
   },
   { revalidate: path },
 );
@@ -249,7 +261,7 @@ export const verifyAcceptanceAction = action(
   z.object({ quotationId: f.uuid(), revisionId: f.uuid(), comment: f.optStr(), password: f.str("Enter your password to sign.") }),
   async (ctx, i) => {
     await verifyAcceptance(ctx, i.revisionId, { password: i.password, comment: i.comment });
-    return "Acceptance verified. The customer PO can now be registered against this revision.";
+    return "Acceptance verified. The customer PO can now be registered against this revision. For an online acceptance, the signed confirmation has been emailed to the customer.";
   },
   { revalidate: path },
 );

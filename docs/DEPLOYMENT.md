@@ -21,7 +21,7 @@ To run locally against a real PostgreSQL, set `DATABASE_URL` and `DATABASE_URL_U
 2. **Database.** In the Vercel project go to *Storage → Marketplace → Neon (Postgres) → Create* and connect it to the project. Vercel injects `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct, used for migrations).
 3. **Files.** Go to *Storage → Blob → Create store*, choose **Private** access, and connect it to the project. Vercel injects `BLOB_READ_WRITE_TOKEN` / `BLOB_STORE_ID`.
 4. **Environment variables** (*Settings → Environment Variables*):
-   - `APP_BASE_URL=https://<your-domain>`
+   - `APP_BASE_URL=https://<your-domain>`. This is used in the customer acceptance links in quotation emails. Without it, the address of the browser that sent the quotation is used.
    - `CRON_SECRET=<32+ random chars>`
    - Email: `RESEND_API_KEY`, `EMAIL_FROM`, `RESEND_WEBHOOK_SECRET` (inbound).
    - BoxHero: `BOXHERO_MODE=api`, `BOXHERO_API_TOKEN`, `BOXHERO_WEBHOOK_SECRET`.
@@ -29,7 +29,9 @@ To run locally against a real PostgreSQL, set `DATABASE_URL` and `DATABASE_URL_U
 5. **Deploy.** The first build runs the migrations and seeds the base data (roles, defaults).
 6. **First administrator.** From a trusted machine with `DATABASE_URL_UNPOOLED` set, run `npm run admin:create` with `ADMIN_EMAIL` and `ADMIN_PASSWORD`. The account must change its password at first sign-in.
 7. **Cron.** `vercel.json` schedules `/api/cron/daily` (05:00 UTC) and `/api/cron/boxhero-sync` (05:30 UTC). On the Hobby plan, crons run at most once a day. Outboxes are also processed immediately after each user action, so the daily cron is a safety net. On Pro, add `{ "path": "/api/cron/outbox", "schedule": "*/10 * * * *" }`.
-8. **Security.** Enable Vercel deployment protection for preview deployments. Add a firewall rate-limit rule on `/login` and `/api/*`.
+8. **Security.** Enable Vercel deployment protection for preview deployments.
+   - Customers (quotation links) and staff without Vercel accounts must be able to reach **production**. Either serve it on a custom domain (Standard Protection leaves custom domains public), or set *Settings → Deployment Protection → Vercel Authentication* to cover previews only.
+   - The app has its own sign-in for every staff page. Add a firewall rate-limit rule on `/login` and `/api/*`.
 
 ### Troubleshooting the first deploy
 - **Build fails with "No PostgreSQL URL found in the build environment".** The database is not connected to this project for the environment being built. Go to *Project → Storage*, open the Neon database, choose *Connect Project*, select this project, and tick **Production** (and Preview, if wanted). Then redeploy. The build log lists the database-like variable *names* it can see (never values).

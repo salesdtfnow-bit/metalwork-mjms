@@ -9,6 +9,7 @@ import {
   quotationLines,
   quotationRevisions,
   quotations,
+  quoteAcceptanceLinks,
   users,
 } from "../db/schema";
 import { audit } from "../audit";
@@ -23,6 +24,8 @@ import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { signApproval } from "./approvals";
 import { queueEmail } from "../integrations/email/outbox";
+import { acceptanceUrl, issueAcceptanceLinkTx } from "./quote-acceptance";
+import { escapeHtml } from "./notifications";
 
 const OPEN_REV = ["draft", "internal_review", "sent", "awaiting_response"];
 
@@ -280,7 +283,11 @@ export async function reviewQuotation(ctx: Ctx, revisionId: string, input: { dec
  * Marks a reviewed revision as sent: locks it, stamps validity, stores the issued PDF.
  * Optionally queues an email to the customer contact with the PDF attached.
  */
-export async function markQuotationSent(ctx: Ctx, revisionId: string, input: { sentTo: string; emailToCustomer?: boolean; message?: string | null }) {
+export async function markQuotationSent(
+  ctx: Ctx,
+  revisionId: string,
+  input: { sentTo: string; emailToCustomer?: boolean; message?: string | null; /** Origin for the customer acceptance link, e.g. https://mjms.example.co.uk */ linkBaseUrl?: string | null },
+) {
   requirePermission(ctx, "quotations.send");
   if (!input.sentTo?.trim()) throw invalid("Record who the quotation was sent to.", { field: "sentTo" });
   const { renderQuotationPdf } = await import("../pdf/quotation");
@@ -294,6 +301,9 @@ export async function markQuotationSent(ctx: Ctx, revisionId: string, input: { s
     const pdf = await renderQuotationPdf(tx, rev.id);
     const file = await storeFile(tx.db, { bytes: pdf, name: `${q.ref}-rev${rev.revisionNo}.pdf`, mimeType: "application/pdf", uploadedBy: ctx.actor.userId });
     await tx.db.update(quotationRevisions).set({ pdfFileId: file.id }).where(eq(quotationRevisions.id, rev.id));
+    // Secure link for the customer to accept, decline or query this exact revision online.
+    const token = await issueAcceptanceLinkTx(tx, { id: rev.id, quotationId: q.id, validUntil });
+    const link = input.linkBaseUrl ? acceptanceUrl(input.linkBaseUrl, token) : null;
     // Earlier open revisions are superseded by the issued one.
     await tx.db
       .update(quotationRevisions)
@@ -307,13 +317,15 @@ export async function markQuotationSent(ctx: Ctx, revisionId: string, input: { s
         idempotencyKey: `quote-sent:${rev.id}`,
         to,
         subject: `Quotation ${q.ref} rev ${rev.revisionNo} — ${q.title}`,
-        html: `<p>Please find attached our quotation ${q.ref} revision ${rev.revisionNo}.</p>${input.message ? `<p>${input.message.replace(/</g, "&lt;")}</p>` : ""}<p>The quotation is valid until ${validUntil}.</p>`,
-        text: `Please find attached our quotation ${q.ref} revision ${rev.revisionNo}. Valid until ${validUntil}.`,
+        html: `<p>Please find attached our quotation ${q.ref} revision ${rev.revisionNo}.</p>${input.message ? `<p>${escapeHtml(input.message)}</p>` : ""}<p>The quotation is valid until ${validUntil}.</p>${link ? `<p>You can review it and accept, decline or ask for changes online:<br><a href="${link}">Review and respond to quotation ${q.ref}</a></p>` : ""}`,
+        text: `Please find attached our quotation ${q.ref} revision ${rev.revisionNo}. Valid until ${validUntil}.${link ? `
+
+Review and respond online: ${link}` : ""}`,
         attachmentFileIds: [file.id],
       });
     }
     await audit(tx, { action: "quotation.sent", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, after: { sentTo: input.sentTo, validUntil, pdfFileId: file.id, sha256: file.sha256, emailed: !!input.emailToCustomer } });
-    return { fileId: file.id, validUntil };
+    return { fileId: file.id, validUntil, acceptanceUrl: link };
   });
 }
 
@@ -341,6 +353,7 @@ export async function recordCustomerResponse(
   return mutate(ctx, async (tx) => {
     const { rev, q } = await loadRevision(tx, revisionId);
     if (!["sent", "awaiting_response"].includes(rev.status)) throw invalid("Responses can only be recorded for sent quotations.");
+    if (rev.acceptanceRecordedAt) throw invalid("An acceptance is already recorded for this revision — verify it instead.");
     if (rev.validUntil && rev.validUntil < todayISO() && input.decision === "accepted") {
       throw invalid(`This quotation expired on ${rev.validUntil}. Issue a new revision before accepting.`);
     }
@@ -364,7 +377,18 @@ export async function recordCustomerResponse(
   });
 }
 
-/** Second-person verification that the recorded acceptance is genuine and matches the issued revision. */
+/** What the verifier signs: a check of staff-recorded evidence, or a countersignature of an online acceptance. */
+export function acceptanceSignMeaning(q: { ref: string }, rev: { revisionNo: number; acceptanceChannel: string | null; acceptedByName: string | null; acceptedByPosition: string | null }) {
+  return rev.acceptanceChannel === "customer_link"
+    ? `I countersign the online acceptance of ${q.ref} revision ${rev.revisionNo} by ${rev.acceptedByName ?? "the customer"}${rev.acceptedByPosition ? `, ${rev.acceptedByPosition}` : ""}, and confirm we accept this order on the quoted price, quantity, revision and terms.`
+    : `I have checked the customer's acceptance evidence against ${q.ref} revision ${rev.revisionNo} (price, quantity, revision, terms) and confirm the acceptance.`;
+}
+
+/**
+ * Second-person verification that the recorded acceptance is genuine and matches the issued revision.
+ * For an online (customer link) acceptance this is our countersignature: a confirmation PDF is produced
+ * and emailed to the customer's signatory.
+ */
 export async function verifyAcceptance(ctx: Ctx, revisionId: string, input: { password: string; comment?: string | null }) {
   requirePermission(ctx, "quotations.verify_acceptance");
   return mutate(ctx, async (tx) => {
@@ -377,14 +401,33 @@ export async function verifyAcceptance(ctx: Ctx, revisionId: string, input: { pa
       entityType: "quotation_revision",
       entityId: rev.id,
       decision: "approved",
-      meaning: `I have checked the customer's acceptance evidence against ${q.ref} revision ${rev.revisionNo} (price, quantity, revision, terms) and confirm the acceptance.`,
+      meaning: acceptanceSignMeaning(q, rev),
       comment: input.comment,
       password: input.password,
     });
     await tx.db.update(quotationRevisions).set({ status: "accepted", acceptanceVerifiedBy: ctx.actor.userId, acceptanceVerifiedAt: new Date() }).where(eq(quotationRevisions.id, rev.id));
     await tx.db.update(quotations).set({ status: "accepted" }).where(eq(quotations.id, q.id));
     if (q.enquiryId) await advanceEnquiryStatus(tx, q.enquiryId, "won");
-    await audit(tx, { action: "quotation.accepted", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, approvalId: approval.id });
+    let confirmationFileId: string | null = null;
+    if (rev.acceptanceChannel === "customer_link") {
+      const { renderAcceptanceConfirmationPdf } = await import("../pdf/acceptance");
+      const pdf = await renderAcceptanceConfirmationPdf(tx, rev.id);
+      const file = await storeFile(tx.db, { bytes: pdf, name: `${q.ref}-rev${rev.revisionNo}-order-acceptance.pdf`, mimeType: "application/pdf", uploadedBy: ctx.actor.userId });
+      confirmationFileId = file.id;
+      await tx.db.update(quotationRevisions).set({ acceptanceConfirmationFileId: file.id }).where(eq(quotationRevisions.id, rev.id));
+      if (rev.acceptedByEmail) {
+        const settings = await getSettings(tx.db);
+        await queueEmail(tx.db, {
+          idempotencyKey: `quote-acceptance-confirmed:${rev.id}`,
+          to: [rev.acceptedByEmail],
+          subject: `Order confirmed — quotation ${q.ref} rev ${rev.revisionNo}`,
+          html: `<p>Thank you${rev.acceptedByName ? `, ${escapeHtml(rev.acceptedByName)}` : ""}. We have countersigned your acceptance of quotation ${q.ref} revision ${rev.revisionNo}.</p><p>The signed order acceptance is attached for your records.</p><p>${escapeHtml(settings.companyName)}</p>`,
+          text: `We have countersigned your acceptance of quotation ${q.ref} revision ${rev.revisionNo}. The signed order acceptance is attached.`,
+          attachmentFileIds: [file.id],
+        });
+      }
+    }
+    await audit(tx, { action: "quotation.accepted", entityType: "quotation", entityId: q.id, entityRef: `${q.ref} rev ${rev.revisionNo}`, approvalId: approval.id, after: { channel: rev.acceptanceChannel ?? "staff", confirmationFileId } });
   });
 }
 
@@ -512,6 +555,8 @@ export async function getQuotation(ctx: Ctx, id: string) {
     : [];
   const people = await ctx.db.select({ id: users.id, name: users.name }).from(users);
   const name = (uid: string | null) => people.find((p) => p.id === uid)?.name ?? null;
+  // Latest customer link per revision (status only — tokens are never stored).
+  const links = revIds.length ? await ctx.db.select().from(quoteAcceptanceLinks).where(inArray(quoteAcceptanceLinks.revisionId, revIds)).orderBy(desc(quoteAcceptanceLinks.createdAt)) : [];
   return {
     ...row,
     revisions: revisions.map((r) => ({
@@ -521,6 +566,10 @@ export async function getQuotation(ctx: Ctx, id: string) {
       sentByName: name(r.sentBy),
       acceptanceRecordedByName: name(r.acceptanceRecordedBy),
       acceptanceVerifiedByName: name(r.acceptanceVerifiedBy),
+      customerLink: (() => {
+        const l = links.find((x) => x.revisionId === r.id);
+        return l ? { createdAt: l.createdAt, expiresAt: l.expiresAt, revokedAt: l.revokedAt, respondedAt: l.respondedAt, viewCount: l.viewCount, lastViewedAt: l.lastViewedAt } : null;
+      })(),
       lines: lines.filter((l) => l.revisionId === r.id).map((l) => ({ ...l, operations: ops.filter((o) => o.op.lineId === l.id) })),
     })),
   };

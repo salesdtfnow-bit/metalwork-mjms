@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useActionState, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, startTransition, useActionState, useContext, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { buttonClass, cx, type ButtonSize, type ButtonVariant } from "./ui";
 import type { ActionResult } from "@/server/boundary";
@@ -8,6 +8,7 @@ import type { ActionResult } from "@/server/boundary";
 type FormAction = (prev: ActionResult | null, fd: FormData) => Promise<ActionResult>;
 
 const ErrorsCtx = createContext<Record<string, string> | undefined>(undefined);
+const PendingCtx = createContext(false);
 const useFieldError = (name: string) => useContext(ErrorsCtx)?.[name];
 
 /**
@@ -37,7 +38,7 @@ export function ActionForm({
   inline?: boolean;
   hideSubmit?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, null);
+  const [state, formAction, pending] = useActionState(action, null);
   const formRef = useRef<HTMLFormElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Duplicate-submission key: attached at submit time and reused until a response arrives, so a
@@ -49,13 +50,22 @@ export function ActionForm({
     return formAction(fd);
   };
 
+  // Submitted via onSubmit rather than <form action>, because React resets an action form after every
+  // submission — which wiped what the user typed whenever the server returned a validation error.
+  // Fields are cleared after a successful save instead, as before.
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    startTransition(() => submit(fd));
+  };
   useEffect(() => {
-    if (state?.ok && resetOnSuccess) formRef.current?.reset();
+    if (state?.ok) formRef.current?.reset();
   }, [state, resetOnSuccess]);
 
   return (
     <ErrorsCtx.Provider value={state && !state.ok ? state.fieldErrors : undefined}>
-      <form ref={formRef} action={submit} className={cx(inline ? "flex flex-wrap items-end gap-2" : "space-y-3", className)} noValidate={false}>
+      <PendingCtx.Provider value={pending}>
+      <form ref={formRef} onSubmit={onSubmit} className={cx(inline ? "flex flex-wrap items-end gap-2" : "space-y-3", className)} noValidate={false}>
         {state && <ResultBanner state={state} />}
         {children}
         {!hideSubmit &&
@@ -92,6 +102,7 @@ export function ActionForm({
             </SubmitButton>
           ))}
       </form>
+      </PendingCtx.Provider>
     </ErrorsCtx.Provider>
   );
 }
@@ -135,7 +146,8 @@ const GATE_LABELS: Record<string, string> = {
 export const gateLabel = (g: string) => GATE_LABELS[g] ?? g;
 
 export function SubmitButton({ children, variant = "primary", size = "md", className }: { children: ReactNode; variant?: ButtonVariant; size?: ButtonSize; className?: string }) {
-  const { pending } = useFormStatus();
+  const status = useFormStatus();
+  const pending = useContext(PendingCtx) || status.pending;
   return (
     <button type="submit" disabled={pending} aria-busy={pending} className={buttonClass(variant, size, className)}>
       {pending ? "Working…" : children}
@@ -250,13 +262,21 @@ export function SelectField({ options, defaultValue, placeholder, ...c }: Common
 
 export function CheckboxField({ label, name, defaultChecked, hint, value = "on" }: { label: string; name: string; defaultChecked?: boolean; hint?: string; value?: string }) {
   const id = useId();
+  const err = useFieldError(name);
   return (
-    <div className="flex items-start gap-2">
-      <input id={id} type="checkbox" name={name} value={value} defaultChecked={defaultChecked} className="mt-0.5 h-4 w-4 accent-dykem" />
-      <label htmlFor={id} className="text-[13.5px] text-ink">
-        {label}
-        {hint && <span className="block text-[12px] text-steel">{hint}</span>}
-      </label>
+    <div>
+      <div className="flex items-start gap-2">
+        <input id={id} type="checkbox" name={name} value={value} defaultChecked={defaultChecked} aria-invalid={!!err} aria-describedby={err ? `${id}-err` : undefined} className="mt-0.5 h-4 w-4 accent-dykem" />
+        <label htmlFor={id} className="text-[13.5px] text-ink">
+          {label}
+          {hint && <span className="block text-[12px] text-steel">{hint}</span>}
+        </label>
+      </div>
+      {err && (
+        <p id={`${id}-err`} className="mt-1 pl-6 text-[12px] text-red">
+          {err}
+        </p>
+      )}
     </div>
   );
 }

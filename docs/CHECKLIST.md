@@ -31,6 +31,7 @@ Verification evidence for each phase is in the git history and `tests/`.
 - [x] Quotation revisions (immutable once sent), statuses, review and approval
 - [x] Quotation PDF
 - [x] Customer acceptance recording and verification (evidence required)
+- [x] Customer online acceptance (secure link), countersignature and signed order acceptance PDF
 - [x] Customer PO registration and verification
 - [x] Convert accepted quote + PO into job (job lines, pinned drawing revisions)
 

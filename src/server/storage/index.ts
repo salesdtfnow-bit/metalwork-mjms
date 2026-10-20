@@ -23,7 +23,7 @@ export function storageBackend(): Backend {
 }
 
 function localRoot() {
-  return path.resolve(process.env.STORAGE_DIR ?? "./storage");
+  return path.resolve(/*turbopackIgnore: true*/ process.env.STORAGE_DIR ?? "./storage");
 }
 
 const MIME_BY_EXT: Record<string, string> = {

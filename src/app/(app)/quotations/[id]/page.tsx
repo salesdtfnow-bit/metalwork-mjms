@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageCtx } from "@/server/auth/next";
-import { getQuotation } from "@/server/services/quotations";
+import { acceptanceSignMeaning, getQuotation } from "@/server/services/quotations";
 import { getSettings } from "@/server/services/settings";
 import { entityHistory } from "@/server/services/ui/sales";
 import { can, canAny } from "@/server/context";
@@ -22,6 +22,7 @@ import {
   markSentAction,
   recordAcceptanceAction,
   recordRejectionAction,
+  regenerateLinkAction,
   removeQuoteLineAction,
   reviewQuotationAction,
   saveQuoteLineAction,
@@ -232,7 +233,16 @@ export default async function QuotationPage({ params, searchParams }: { params: 
                   </a>
                 ) : null,
               },
-              { label: "Acceptance recorded by", value: r.acceptanceRecordedByName ? `${r.acceptanceRecordedByName}, ${fmtDateTime(r.acceptanceRecordedAt)}` : null },
+              {
+                label: "Acceptance recorded",
+                value: r.acceptanceChannel === "customer_link"
+                  ? `Online by ${r.acceptedByName ?? "customer"}${r.acceptedByPosition ? `, ${r.acceptedByPosition}` : ""}${r.acceptedByEmail ? ` (${r.acceptedByEmail})` : ""}, ${fmtDateTime(r.acceptanceRecordedAt)}`
+                  : r.acceptanceRecordedByName
+                    ? `${r.acceptanceRecordedByName}, ${fmtDateTime(r.acceptanceRecordedAt)}`
+                    : null,
+              },
+              { label: "Customer IP address", value: r.acceptanceChannel === "customer_link" ? r.acceptanceIp : null },
+              { label: "Accepted PDF (SHA-256)", value: r.acceptedPdfSha256 ? <span className="break-all font-mono text-[11.5px]">{r.acceptedPdfSha256}</span> : null },
               { label: "Acceptance reference", value: r.acceptanceReference },
               {
                 label: "Acceptance evidence",
@@ -242,7 +252,21 @@ export default async function QuotationPage({ params, searchParams }: { params: 
                   </a>
                 ) : null,
               },
-              { label: "Acceptance verified by", value: r.acceptanceVerifiedByName ? `${r.acceptanceVerifiedByName}, ${fmtDateTime(r.acceptanceVerifiedAt)}` : null },
+              { label: r.acceptanceChannel === "customer_link" ? "Countersigned by" : "Acceptance verified by", value: r.acceptanceVerifiedByName ? `${r.acceptanceVerifiedByName}, ${fmtDateTime(r.acceptanceVerifiedAt)}` : null },
+              {
+                label: "Signed order acceptance",
+                value: r.acceptanceConfirmationFileId ? (
+                  <a className="link" href={`/api/files/${r.acceptanceConfirmationFileId}`}>
+                    {q.ref}-rev{r.revisionNo}-order-acceptance.pdf
+                  </a>
+                ) : null,
+              },
+              {
+                label: "Customer link",
+                value: r.customerLink
+                  ? `Issued ${fmtDateTime(r.customerLink.createdAt)}${r.customerLink.revokedAt ? `; replaced ${fmtDateTime(r.customerLink.revokedAt)}` : ""}; opened ${r.customerLink.viewCount} ${r.customerLink.viewCount === 1 ? "time" : "times"}${r.customerLink.lastViewedAt ? `, last ${fmtDateTime(r.customerLink.lastViewedAt)}` : ""}`
+                  : null,
+              },
               { label: "Customer feedback and follow-ups", value: r.customerFeedback, wide: true },
             ]}
           />
@@ -590,21 +614,56 @@ function NextStep({
           </Disclosure>,
         );
       }
+      const link = r.customerLink && !r.customerLink.revokedAt ? r.customerLink : null;
+      if (can(a, "quotations.send") && !expired) {
+        row.push(
+          <Disclosure key="link" label={link ? "Replace customer link" : "Create customer link"}>
+            <ActionForm action={regenerateLinkAction} submitLabel={link ? "Replace link" : "Create link"} className="w-[min(520px,80vw)]" confirm={link ? "The current link stops working immediately. Send the new link to the customer." : undefined}>
+              {hidden}
+              <p className="text-[13px] text-steel">
+                The customer uses the link to accept (with their name, position and PO), ask for changes or decline — no account needed. {link ? "Use this if the link was lost or sent to the wrong person." : ""}
+              </p>
+            </ActionForm>
+          </Disclosure>,
+        );
+      }
       parts.push(
         <div key="resp">
           <p className="mb-2 text-[13px] text-steel">
             Sent to {r.sentTo ?? "the customer"} on {fmtDate(r.sentAt)}; valid until{" "}
-            <span className={expired ? "font-medium text-red" : "text-ink"}>{fmtDate(r.validUntil)}</span>.
+            <span className={expired ? "font-medium text-red" : "text-ink"}>{fmtDate(r.validUntil)}</span>.{" "}
+            {link
+              ? link.viewCount
+                ? `Customer link opened ${link.viewCount} ${link.viewCount === 1 ? "time" : "times"}, last ${fmtDateTime(link.lastViewedAt)}.`
+                : "Customer link not opened yet."
+              : "No customer link — the customer can still reply by email."}
           </p>
+          {r.customerFeedback && (
+            <div className="mb-2 rounded-sm border border-line bg-paper px-3 py-2 text-[13px]">
+              <p className="text-[12px] text-steel">Customer comments and follow-ups</p>
+              <p className="whitespace-pre-line text-ink">{r.customerFeedback}</p>
+            </div>
+          )}
           {row.length > 0 && <div className="flex flex-wrap items-start gap-2">{row}</div>}
         </div>,
       );
     } else if (!r.acceptanceVerifiedAt) {
       const sameUser = r.acceptanceRecordedBy === ctx.me;
+      const online = r.acceptanceChannel === "customer_link";
       const info = (
         <p className="text-[13px] text-steel">
-          Acceptance recorded by {r.acceptanceRecordedByName ?? "—"} on {fmtDateTime(r.acceptanceRecordedAt)}
-          {r.acceptanceReference && <> — reference {r.acceptanceReference}</>}.{" "}
+          {online ? (
+            <>
+              <span className="font-medium text-ink">Accepted online</span> by {r.acceptedByName}
+              {r.acceptedByPosition && <>, {r.acceptedByPosition}</>}
+              {r.acceptedByEmail && <> ({r.acceptedByEmail})</>} on {fmtDateTime(r.acceptanceRecordedAt)} from IP {r.acceptanceIp ?? "unknown"}
+            </>
+          ) : (
+            <>
+              Acceptance recorded by {r.acceptanceRecordedByName ?? "—"} on {fmtDateTime(r.acceptanceRecordedAt)}
+            </>
+          )}
+          {r.acceptanceReference && <> — PO / reference {r.acceptanceReference}</>}.{" "}
           {r.acceptanceEvidenceFileId && (
             <a className="link" href={`/api/files/${r.acceptanceEvidenceFileId}`}>
               Open evidence
@@ -614,11 +673,12 @@ function NextStep({
       );
       if (can(a, "quotations.verify_acceptance") && !sameUser) {
         parts.push(
-          <ActionForm key="ver" action={verifyAcceptanceAction} submitLabel="Verify acceptance">
+          <ActionForm key="ver" action={verifyAcceptanceAction} submitLabel={online ? "Countersign acceptance" : "Verify acceptance"}>
             {hidden}
             {info}
+            {online && <p className="text-[13px] text-steel">Countersigning confirms the order and emails the signed order acceptance PDF to {r.acceptedByEmail ?? "the customer"}.</p>}
             <TextArea label="Comment" name="comment" rows={2} />
-            <SignatureBlock meaning={`By signing I confirm I have checked the customer’s acceptance evidence against ${q.ref} revision ${r.revisionNo} (price, quantity, revision and terms) and that it is genuine.`} />
+            <SignatureBlock meaning={`By signing: ${acceptanceSignMeaning(q, r)}`} />
           </ActionForm>,
         );
       } else {
@@ -638,8 +698,13 @@ function NextStep({
     parts.push(
       <div key="acc" className="flex flex-wrap items-center gap-3">
         <p className="text-[13px] text-green">
-          Accepted and verified by {r.acceptanceVerifiedByName ?? "—"} on {fmtDateTime(r.acceptanceVerifiedAt)}.
+          {r.acceptanceChannel === "customer_link" ? `Accepted online by ${r.acceptedByName ?? "the customer"}; countersigned by` : "Accepted and verified by"} {r.acceptanceVerifiedByName ?? "—"} on {fmtDateTime(r.acceptanceVerifiedAt)}.
         </p>
+        {r.acceptanceConfirmationFileId && (
+          <a className="link text-[13px]" href={`/api/files/${r.acceptanceConfirmationFileId}`}>
+            Signed order acceptance (PDF)
+          </a>
+        )}
         {can(a, "orders.manage") && (
           <LinkButton href={`/orders/new?customerId=${customerId}&revisionId=${r.id}`} variant="primary" size="sm">
             Register customer PO

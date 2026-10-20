@@ -179,11 +179,48 @@ export const quotationRevisions = pgTable(
     acceptanceVerifiedBy: uuid().references(() => users.id),
     acceptanceVerifiedAt: ts(),
     acceptanceReference: text(),
+    /** How the acceptance arrived: staff (recorded from evidence) | customer_link (customer accepted online). */
+    acceptanceChannel: text(),
+    /** Customer-declared signatory for an online acceptance (click-to-accept, not a qualified e-signature). */
+    acceptedByName: text(),
+    acceptedByPosition: text(),
+    acceptedByEmail: text(),
+    acceptanceIp: text(),
+    acceptanceUserAgent: text(),
+    /** SHA-256 of the issued PDF the customer was shown when accepting. */
+    acceptedPdfSha256: text(),
+    /** Acceptance confirmation (customer acceptance + our countersignature), produced on verification. */
+    acceptanceConfirmationFileId: uuid().references(() => files.id),
     /** Once sent, a revision is locked — changes require a new revision. */
     isLocked: boolean().notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("quorev_uq").on(t.quotationId, t.revisionNo)],
+);
+
+/**
+ * Secure link that lets a customer review and accept, reject or query one issued revision without an
+ * account. Only the SHA-256 of the token is stored; issuing a new link revokes earlier ones for the quotation.
+ */
+export const quoteAcceptanceLinks = pgTable(
+  "quote_acceptance_links",
+  {
+    id: pk(),
+    revisionId: uuid()
+      .notNull()
+      .references(() => quotationRevisions.id),
+    tokenHash: text().notNull(),
+    createdBy: uuid().references(() => users.id),
+    createdAt: createdAt(),
+    /** Responses are refused after this; read-only viewing continues until viewUntil. */
+    expiresAt: ts().notNull(),
+    viewUntil: ts().notNull(),
+    revokedAt: ts(),
+    respondedAt: ts(),
+    lastViewedAt: ts(),
+    viewCount: integer().notNull().default(0),
+  },
+  (t) => [uniqueIndex("qal_token_uq").on(t.tokenHash), index("qal_rev_idx").on(t.revisionId)],
 );
 
 export const quotationLines = pgTable("quotation_lines", {

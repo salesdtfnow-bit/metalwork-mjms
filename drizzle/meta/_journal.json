@@ -22,6 +22,13 @@
       "when": 1792088574806,
       "tag": "0002_submission_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792487593351,
+      "tag": "0003_customer_quote_acceptance",
+      "breakpoints": true
     }
   ]
 }

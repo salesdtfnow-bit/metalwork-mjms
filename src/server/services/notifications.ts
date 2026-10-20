@@ -8,6 +8,7 @@ import type { Permission } from "../auth/permissions";
 export const NOTIFICATION_TYPES = {
   "enquiry.new": "New enquiry received",
   "quotation.review": "Quotation awaiting approval",
+  "quotation.customer_response": "Customer accepted, declined or queried a quotation online",
   "order.received": "Customer PO received",
   "material.ordered": "Material ordered",
   "material.overdue": "Material delivery overdue",

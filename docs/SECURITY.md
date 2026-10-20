@@ -40,6 +40,14 @@ Last reviewed: 2026-10-15. This reflects the code at this commit.
 - **Open redirects.** Post-login `next` targets and scanned QR codes must be same-origin relative paths (`//` and `/\` are rejected).
 - **Duplicate submissions.** Every form carries a one-time key (`submission_keys`). Material events and stock movements have unique idempotency keys.
 - **Exports.** CSV export neutralises spreadsheet formula injection.
+- **Public customer page (`/q/<token>`).** This is the only page reachable without signing in.
+  - **The link token is the credential.** It is 256 bits of randomness; only its SHA-256 is stored, and the plaintext exists only in the email and the sending confirmation.
+  - **What it can reach.** One quotation revision, its issued PDF, and later its signed order acceptance. Unknown, malformed and expired links all get the same "not valid" page.
+  - **When it stops working.** Responses stop at the end of the validity date. A newer revision, or **Replace customer link**, revokes the link immediately. Read-only viewing ends 90 days after expiry.
+  - **No double responses.** A response claims the link atomically, so double-clicks or simultaneous responses cannot record two outcomes.
+  - **What is recorded.** Downloads are written to the file access log with the IP address. The acceptance records the signatory's name, position, email, IP address, browser and the SHA-256 of the PDF they were shown.
+  - **Leak protection.** The page sends `Referrer-Policy: no-referrer` and `noindex`.
+  - **Legal standing.** Click-to-accept is an electronic acceptance, not a qualified electronic signature, and the confirmation PDF says so.
 
 ## Integrations
 - **Secrets** come only from environment variables: BoxHero token, Resend key, webhook secrets, cron secret. `.env*` is git-ignored.

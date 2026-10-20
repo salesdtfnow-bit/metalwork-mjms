@@ -69,7 +69,10 @@ export async function authorizeFileAccess(ctx: Ctx, fileId: string): Promise<{ f
     [db.select({ id: inboundEmailAttachments.id }).from(inboundEmailAttachments).where(eq(inboundEmailAttachments.fileId, fileId)), "email.import", "inbound_email_attachment"],
     [db.select({ id: inboundEmails.id }).from(inboundEmails).where(eq(inboundEmails.rawFileId, fileId)), "email.import", "inbound_email"],
     [
-      db.select({ id: quotationRevisions.id }).from(quotationRevisions).where(or(eq(quotationRevisions.pdfFileId, fileId), eq(quotationRevisions.acceptanceEvidenceFileId, fileId))),
+      db
+        .select({ id: quotationRevisions.id })
+        .from(quotationRevisions)
+        .where(or(eq(quotationRevisions.pdfFileId, fileId), eq(quotationRevisions.acceptanceEvidenceFileId, fileId), eq(quotationRevisions.acceptanceConfirmationFileId, fileId))),
       "quotations.view",
       "quotation",
     ],

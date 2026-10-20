@@ -38,6 +38,7 @@ Key:
 | Microsoft 365 / Graph mailbox import | ⬜ | Documented adapter path in INTEGRATIONS.md |
 | Quotation costing engine (decimal-safe) | ✅ | `tests/unit/costing.test.ts` |
 | Quotation revisions, review (signed, independent), send (lock + PDF), follow-up, acceptance recorded then verified by a second person | ✅ | Commercial tests |
+| Customer online acceptance via secure link (accept / ask for changes / decline), staff countersignature, signed order acceptance PDF | ✅ | `tests/scenarios/customer-acceptance.test.ts`; checked in browser (customer page, countersign, PDF). Needs the site reachable by customers (see DEPLOYMENT.md) |
 | Quotation PDF | ✅ | PDF bytes verified in tests |
 | Emailing quotations to customers | 🔌 | Queued in the outbox; sent when Resend is configured |
 | Customer PO registration + signed contract review + conversion to job | ✅ | |
