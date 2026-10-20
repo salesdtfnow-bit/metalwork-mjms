@@ -64,7 +64,7 @@ describe("enquiry → quotation → PO → job", () => {
     // PO can be registered but cannot be verified before acceptance is verified
     const po = await registerCustomerOrder(t.sales.ctx, { customerId: cust.id, customerPoNumber: "PO-778", quotationRevisionId: revision.id }, new File(["%PDF"], "po.pdf"));
     await expect(verifyCustomerOrder(t.sales2.ctx, po.id, { password: TEST_PASSWORD })).rejects.toThrow(/not been accepted and verified/);
-    await expect(convertOrderToJob(t.sales.ctx, po.id, { title: "Shafts job" })).rejects.toThrow(/Verify the customer PO/);
+    await expect(convertOrderToJob(t.sales.ctx, po.id, { title: "Shafts job" })).rejects.toThrow(/contract review/);
     await verifyAcceptance(t.sales2.ctx, revision.id, { password: TEST_PASSWORD });
     await verifyCustomerOrder(t.sales2.ctx, po.id, { password: TEST_PASSWORD });
     // duplicate PO number for the same customer is refused

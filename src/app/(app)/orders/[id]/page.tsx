@@ -45,13 +45,15 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     if (e instanceof AppError && e.code === "not_found") notFound();
     throw e;
   });
-  const { o, customer, address, receivedByName, quote, lines, jobs, verifiedByName } = data;
+  const { o, customer, address, receivedByName, quote, lines, orderLines, jobs, verifiedByName } = data;
+  const direct = !quote && orderLines.length > 0;
+  const jobLinesSource = quote ? lines : orderLines;
   const commercial = canAny(ctx.actor, "jobs.view_commercial", "customers.view_commercial", "quotations.view");
   const canVerify = can(ctx.actor, "orders.verify") && o.status === "received";
   const canConvert = can(ctx.actor, "jobs.create") && o.status === "verified";
   const quoteOk = quote?.rev.status === "accepted" && !!quote.rev.acceptanceVerifiedAt;
   const manage = can(ctx.actor, "orders.manage");
-  const canLink = manage && o.status === "received";
+  const canLink = manage && o.status === "received" && orderLines.length === 0;
   const canCancel = manage && !["converted", "cancelled"].includes(o.status);
   const [users, history, revs] = await Promise.all([
     canConvert ? listActiveUsers(ctx) : Promise.resolve([]),
@@ -146,8 +148,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                 <>
                   <ul className="mb-3 space-y-1">
                     <Check ok={!!o.poFileId}>Customer PO document attached</Check>
-                    <Check ok={!!quote}>Quotation revision linked</Check>
-                    <Check ok={quoteOk}>Quotation acceptance recorded and verified{quote && !quoteOk && <> (currently {QUOTE_STATUS[quote.rev.status as keyof typeof QUOTE_STATUS]?.label.toLowerCase() ?? quote.rev.status})</>}</Check>
+                    {direct ? (
+                      <Check ok>Ordered lines entered ({orderLines.length}) — PO received without a quotation</Check>
+                    ) : (
+                      <>
+                        <Check ok={!!quote}>Quotation revision linked</Check>
+                        <Check ok={quoteOk}>Quotation acceptance recorded and verified{quote && !quoteOk && <> (currently {QUOTE_STATUS[quote.rev.status as keyof typeof QUOTE_STATUS]?.label.toLowerCase() ?? quote.rev.status})</>}</Check>
+                      </>
+                    )}
                   </ul>
                   {canLink && (
                     <div className="mb-3">
@@ -177,9 +185,20 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     <ActionForm action={verifyOrderAction} submitLabel="Sign contract review">
                       <input type="hidden" name="orderId" value={o.id} />
                       {!o.poFileId && <FileField label="PO document" name="poFile" required hint="Attach the customer’s PO before verifying." />}
-                      <TextArea label="Discrepancies" name="discrepancies" rows={3} hint="Differences between the PO and the quotation (price, quantity, revision, delivery, terms). Leave blank if none." />
+                      <TextArea
+                        label={direct ? "Concerns or exceptions" : "Discrepancies"}
+                        name="discrepancies"
+                        rows={3}
+                        hint={direct ? "Anything unclear or that we can't meet (drawing, quantity, price, date, terms). Leave blank if none." : "Differences between the PO and the quotation (price, quantity, revision, delivery, terms). Leave blank if none."}
+                      />
                       <TextArea label="Comment" name="comment" rows={2} />
-                      <SignatureBlock meaning={`By signing I confirm I have checked customer PO ${o.customerPoNumber} against the accepted quotation — parts, drawing revisions, quantities, prices, delivery and terms — and recorded any discrepancies above.`} />
+                      <SignatureBlock
+                        meaning={
+                          direct
+                            ? `By signing I confirm I have checked customer PO ${o.customerPoNumber} (no quotation) — parts, drawing revisions, quantities, prices, delivery date and terms — and that we can meet it, with any exceptions recorded above.`
+                            : `By signing I confirm I have checked customer PO ${o.customerPoNumber} against the accepted quotation — parts, drawing revisions, quantities, prices, delivery and terms — and recorded any discrepancies above.`
+                        }
+                      />
                     </ActionForm>
                   ) : (
                     <p className="text-[13px] text-steel">Awaiting contract review by someone with permission to verify customer orders.</p>
@@ -197,6 +216,26 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             </Section>
           </div>
 
+          {!quote && orderLines.length > 0 && (
+            <Section title="Ordered lines (PO without a quotation)">
+              <Table head={["#", "Part number", "Description", "Drawing rev", "Material", "Qty", ...(commercial ? ["Unit price", "Line total"] : [])]}>
+                {orderLines.map((l) => (
+                  <tr key={l.id}>
+                    <td className="text-steel">{l.lineNo}</td>
+                    <td className="plate whitespace-nowrap text-[13px]">{l.partNumber}</td>
+                    <td>{l.description}</td>
+                    <td>{l.drawingRevision ?? "—"}</td>
+                    <td>{l.materialSpec ?? "—"}</td>
+                    <td className="text-right tabular-nums">{fmtQty(l.quantity)}</td>
+                    {commercial && <td className="whitespace-nowrap text-right tabular-nums">{l.unitPrice ? fmtMoney(l.unitPrice, o.currency) : "—"}</td>}
+                    {commercial && <td className="whitespace-nowrap text-right tabular-nums">{l.lineTotal ? fmtMoney(l.lineTotal, o.currency) : "—"}</td>}
+                  </tr>
+                ))}
+              </Table>
+            </Section>
+          )}
+
+          {(quote || orderLines.length === 0) && (
           <Section title={quote ? `Quoted lines — ${quote.q.ref} rev ${quote.rev.revisionNo}` : "Quoted lines"}>
             <Table head={["#", "Part number", "Description", "Drawing", "Material", "Qty", ...(commercial ? ["Unit price", "Line total"] : [])]} empty={quote ? "The quotation revision has no lines." : "No quotation linked."}>
               {lines.map((l) => (
@@ -222,13 +261,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               </p>
             )}
           </Section>
+          )}
 
-          {canConvert && quote && (
+          {canConvert && jobLinesSource.length > 0 && (
             <Section title="Create job">
               <ActionForm action={convertToJobAction} submitLabel="Create job" confirm="A permanent job number will be issued and this order marked as converted.">
                 <input type="hidden" name="orderId" value={o.id} />
                 <FormGrid cols={4}>
-                  <TextField label="Job title" name="title" required defaultValue={quote.q.title} className="sm:col-span-2" />
+                  <TextField label="Job title" name="title" required defaultValue={quote?.q.title ?? `${orderLines[0]?.description ?? "Order"} — PO ${o.customerPoNumber}`} className="sm:col-span-2" />
                   <SelectField label="Owner" name="ownerId" placeholder="Me" defaultValue={ctx.actor.userId} options={users.map((u) => ({ value: u.id, label: u.name }))} />
                   <SelectField label="Priority" name="priority" defaultValue="3" options={Object.entries(PRIORITY).map(([k, v]) => ({ value: k, label: v.label }))} />
                   <TextField label="Required date" name="requiredDate" type="date" defaultValue={o.requiredDate} />
@@ -241,13 +281,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                         <th scope="col">Include</th>
                         <th scope="col">Part number</th>
                         <th scope="col">Description</th>
-                        <th scope="col">Quoted qty</th>
+                        <th scope="col">{quote ? "Quoted qty" : "Ordered qty"}</th>
                         <th scope="col">Job qty</th>
                         <th scope="col">Traceability</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {lines.map((l) => (
+                      {jobLinesSource.map((l) => (
                         <tr key={l.id}>
                           <td>
                             <input type="hidden" name="lineIds" value={l.id} />
@@ -274,7 +314,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[12px] text-steel">Leave job quantity blank to use the quoted quantity. Customer quality, certification and packaging requirements are copied onto the job.</p>
+                <p className="text-[12px] text-steel">Leave job quantity blank to use the {quote ? "quoted" : "ordered"} quantity. Customer quality, certification and packaging requirements are copied onto the job.</p>
               </ActionForm>
             </Section>
           )}

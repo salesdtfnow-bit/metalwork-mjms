@@ -5,7 +5,7 @@ import { z } from "zod";
 import { action } from "@/server/action";
 import { f } from "@/server/forms";
 import { invalid } from "@/server/errors";
-import { cancelCustomerOrder, convertOrderToJob, linkQuotationToOrder, registerCustomerOrder, verifyCustomerOrder } from "@/server/services/orders";
+import { cancelCustomerOrder, convertOrderToJob, linkQuotationToOrder, registerAndCreateJob, registerCustomerOrder, verifyCustomerOrder } from "@/server/services/orders";
 
 const TRACE = ["job", "batch", "piece"] as const;
 
@@ -22,13 +22,51 @@ export const registerOrderAction = action(
     commercialTerms: f.optStr(),
     notes: f.optStr(),
     poFile: f.file(),
+    poFileId: f.optUuid(),
+    createJob: f.bool(),
+    jobTitle: f.optStr(),
+    priority: f.optInt(),
+    discrepancies: f.optStr(),
+    password: f.optStr(),
   }),
-  async (ctx, { poFile, ...i }) => {
-    const o = await registerCustomerOrder(ctx, i, poFile ?? null);
+  async (ctx, { poFile, poFileId, createJob, jobTitle, priority, discrepancies, password, ...i }, fd) => {
+    const lines = readLines(fd);
+    if (i.quotationRevisionId) lines.length = 0;
+    else if (!lines.length) throw invalid("Enter at least one ordered line, or choose the quotation.");
+    const order = { ...i, lines };
+    const file = poFile ?? null;
+    if (createJob) {
+      if (!password) throw invalid("Enter your password to sign the contract review.", { field: "password" });
+      if (!jobTitle) throw invalid("Give the job a title.", { field: "jobTitle" });
+      const { job } = await registerAndCreateJob(ctx, order, file, { password, discrepancies }, { title: jobTitle, priority: priority ?? 3 }, poFileId);
+      redirect(`/jobs/${job.id}`);
+    }
+    const o = await registerCustomerOrder(ctx, order, file, poFileId);
     redirect(`/orders/${o.id}`);
   },
-  { revalidate: "/orders" },
+  { revalidate: ["/orders", "/jobs"] },
 );
+
+/** Ordered lines typed into the PO form (rows left completely empty are ignored). */
+function readLines(fd: FormData) {
+  const col = (k: string) => fd.getAll(k).map((v) => String(v).trim());
+  const parts = col("line_part");
+  const descs = col("line_desc");
+  const revs = col("line_rev");
+  const mats = col("line_mat");
+  const qtys = col("line_qty").map((v) => v.replace(/,/g, ""));
+  const prices = col("line_price").map((v) => v.replace(/[,£$€\s]/g, ""));
+  const out = [];
+  for (let n = 0; n < parts.length; n++) {
+    if (![parts[n], descs[n], revs[n], mats[n], qtys[n], prices[n]].some(Boolean)) continue;
+    const row = out.length + 1;
+    if (!parts[n]) throw invalid(`Line ${row}: enter the part number.`);
+    if (!/^\d+(\.\d+)?$/.test(qtys[n] ?? "") || Number(qtys[n]) <= 0) throw invalid(`Line ${row}: enter a quantity greater than zero.`);
+    if (prices[n] && !/^\d+(\.\d+)?$/.test(prices[n])) throw invalid(`Line ${row}: the unit price must be a number.`);
+    out.push({ partNumber: parts[n], description: descs[n] || parts[n], drawingRevision: revs[n] || null, materialSpec: mats[n] || null, quantity: qtys[n], unitPrice: prices[n] || null });
+  }
+  return out;
+}
 
 export const verifyOrderAction = action(
   "order.verify",
@@ -57,13 +95,13 @@ export const convertToJobAction = action(
       const trace = String(fd.get(`trace_${id}`) ?? "");
       if (qty && !/^\d+(\.\d+)?$/.test(qty)) throw invalid("Quantities must be numbers.");
       return {
-        quotationLineId: id,
+        lineId: id,
         include: fd.get(`inc_${id}`) === "on",
         quantity: qty || undefined,
         traceabilityLevel: (TRACE as readonly string[]).includes(trace) ? (trace as (typeof TRACE)[number]) : undefined,
       };
     });
-    if (lines.length && !lines.some((l) => l.include)) throw invalid("Select at least one quotation line.");
+    if (lines.length && !lines.some((l) => l.include)) throw invalid("Select at least one line.");
     const job = await convertOrderToJob(ctx, i.orderId, {
       title: i.title,
       ownerId: i.ownerId,
